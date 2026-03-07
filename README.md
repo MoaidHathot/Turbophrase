@@ -6,7 +6,7 @@ AI-powered text transformation tool for Windows. Select text, press a hotkey, an
 
 - **System tray application** - Runs quietly in the background
 - **Global hotkeys** - Transform text from any application
-- **Multiple AI providers** - OpenAI, Azure OpenAI, Anthropic, Ollama
+- **Multiple AI providers** - OpenAI, Azure OpenAI, Anthropic, Ollama, GitHub Copilot
 - **Custom prompts** - Define your own text transformations
 - **Runtime provider switching** - Change providers from the tray menu
 
@@ -161,6 +161,33 @@ Control which notifications are shown in `config.json`:
   }
 }
 ```
+
+### GitHub Copilot
+
+Uses your existing GitHub Copilot subscription. Requires the Copilot CLI to be installed and authenticated.
+
+```json
+{
+  "providers": {
+    "copilot": {
+      "type": "copilot",
+      "model": "gpt-5-mini"
+    }
+  }
+}
+```
+
+**Setup:**
+
+1. Install the Copilot CLI via npm:
+   ```powershell
+   npm install -g @anthropic-ai/copilot-cli
+   ```
+2. Authenticate with your GitHub account:
+   ```powershell
+   copilot auth login
+   ```
+3. No API key required - uses your GitHub Copilot subscription
 
 ## CLI Reference
 
