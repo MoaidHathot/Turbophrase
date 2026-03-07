@@ -180,7 +180,7 @@ turbophrase version                Show version information
 
 ### Prerequisites
 
-- [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - Windows 10/11
 
 ### Build
@@ -196,6 +196,22 @@ dotnet test src/Turbophrase.slnx
 ./build.ps1 -Version 1.0.0
 ```
 
+### Running Tests
+
+The project includes 80 unit tests covering configuration, models, and provider logic:
+
+```powershell
+# Run all tests
+dotnet test src/Turbophrase.slnx
+
+# Run with detailed output
+dotnet test src/Turbophrase.slnx --verbosity normal
+
+# Run specific test project
+dotnet test tests/Turbophrase.Core.Tests/Turbophrase.Core.Tests.csproj
+dotnet test tests/Turbophrase.Providers.Tests/Turbophrase.Providers.Tests.csproj
+```
+
 ### Project Structure
 
 ```
@@ -205,8 +221,8 @@ src/
   Turbophrase.Providers/ # AI provider implementations
   Turbophrase.slnx       # Solution file
 tests/
-  Turbophrase.Core.Tests/
-  Turbophrase.Providers.Tests/
+  Turbophrase.Core.Tests/      # Configuration and model tests (53 tests)
+  Turbophrase.Providers.Tests/ # Provider factory and provider tests (27 tests)
 ```
 
 ## License

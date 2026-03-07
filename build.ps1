@@ -3,19 +3,24 @@
     Builds Turbophrase release artifacts.
 .DESCRIPTION
     This script builds Turbophrase for both x64 and ARM64 architectures,
-    creating ZIP packages for distribution.
+    creating ZIP packages for distribution. Requires .NET 10.0 SDK.
 .PARAMETER Version
     The version number (default: 1.0.0)
 .PARAMETER OutputDir
     The output directory (default: ./artifacts)
+.PARAMETER SkipTests
+    Skip running tests before building
 .EXAMPLE
     ./build.ps1 -Version 1.2.0
 .EXAMPLE
     ./build.ps1 -Version 1.0.0 -OutputDir ./dist
+.EXAMPLE
+    ./build.ps1 -Version 1.0.0 -SkipTests
 #>
 param(
     [string]$Version = "1.0.0",
-    [string]$OutputDir = "./artifacts"
+    [string]$OutputDir = "./artifacts",
+    [switch]$SkipTests
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,6 +28,10 @@ $ErrorActionPreference = "Stop"
 Write-Host "Building Turbophrase v$Version" -ForegroundColor Cyan
 Write-Host "Output directory: $OutputDir" -ForegroundColor Cyan
 Write-Host ""
+
+# Check .NET SDK version
+$dotnetVersion = dotnet --version
+Write-Host "Using .NET SDK: $dotnetVersion" -ForegroundColor Gray
 
 # Clean output directory
 if (Test-Path $OutputDir) {
@@ -40,11 +49,16 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Run tests
-Write-Host "Running tests..." -ForegroundColor Cyan
-dotnet test src/Turbophrase.slnx --configuration Release --verbosity minimal
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "Tests failed"
-    exit 1
+if (-not $SkipTests) {
+    Write-Host "Running tests..." -ForegroundColor Cyan
+    dotnet test src/Turbophrase.slnx --configuration Release --verbosity minimal
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Tests failed"
+        exit 1
+    }
+    Write-Host "All tests passed!" -ForegroundColor Green
+} else {
+    Write-Host "Skipping tests (--SkipTests specified)" -ForegroundColor Yellow
 }
 
 $runtimes = @("win-x64", "win-arm64")
