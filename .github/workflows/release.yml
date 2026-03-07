@@ -1,0 +1,153 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        runtime: [win-x64, win-arm64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Get version from tag
+        id: version
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Restore dependencies
+        run: dotnet restore src/Turbophrase.slnx
+
+      - name: Build
+        run: dotnet build src/Turbophrase.slnx --configuration Release --no-restore -p:Version=${{ steps.version.outputs.VERSION }}
+
+      - name: Test
+        run: dotnet test src/Turbophrase.slnx --configuration Release --no-build --verbosity normal
+
+      - name: Publish ${{ matrix.runtime }}
+        run: |
+          dotnet publish src/Turbophrase/Turbophrase.csproj `
+            --configuration Release `
+            --runtime ${{ matrix.runtime }} `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:Version=${{ steps.version.outputs.VERSION }} `
+            --output ./publish/${{ matrix.runtime }}
+
+      - name: Create ZIP archive
+        run: |
+          Compress-Archive -Path ./publish/${{ matrix.runtime }}/* -DestinationPath ./Turbophrase-${{ steps.version.outputs.VERSION }}-${{ matrix.runtime }}.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Turbophrase-${{ matrix.runtime }}
+          path: ./Turbophrase-${{ steps.version.outputs.VERSION }}-${{ matrix.runtime }}.zip
+
+  release:
+    needs: build
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Generate SHA256 checksums
+        run: |
+          $files = Get-ChildItem -Path ./artifacts -Recurse -Filter *.zip
+          foreach ($file in $files) {
+            $hash = Get-FileHash -Path $file.FullName -Algorithm SHA256
+            "$($hash.Hash)  $($file.Name)" | Out-File -FilePath "./artifacts/$($file.Name).sha256" -Encoding utf8
+          }
+
+      - name: Generate winget manifest
+        run: |
+          $version = "${{ steps.version.outputs.VERSION }}"
+          $x64Zip = Get-ChildItem -Path ./artifacts -Recurse -Filter "*win-x64.zip" | Select-Object -First 1
+          $arm64Zip = Get-ChildItem -Path ./artifacts -Recurse -Filter "*win-arm64.zip" | Select-Object -First 1
+          
+          $x64Hash = (Get-FileHash -Path $x64Zip.FullName -Algorithm SHA256).Hash
+          $arm64Hash = (Get-FileHash -Path $arm64Zip.FullName -Algorithm SHA256).Hash
+          
+          $baseUrl = "https://github.com/MoaidHathot/Turbophrase/releases/download/v$version"
+          
+          $manifest = @"
+          # Turbophrase winget manifest
+          # Submit to: https://github.com/microsoft/winget-pkgs
+          
+          PackageIdentifier: Turbophrase.Turbophrase
+          PackageVersion: $version
+          PackageLocale: en-US
+          Publisher: Turbophrase
+          PublisherUrl: https://github.com/MoaidHathot/Turbophrase
+          Author: Moaid Hathot
+          PackageName: Turbophrase
+          PackageUrl: https://github.com/MoaidHathot/Turbophrase
+          License: MIT
+          LicenseUrl: https://github.com/MoaidHathot/Turbophrase/blob/main/LICENSE
+          Copyright: Copyright 2026 Moaid Hathot
+          ShortDescription: AI-powered text transformation tool for Windows
+          Description: Turbophrase is an AI-powered text transformation tool that runs in your system tray. Select text, press a hotkey, and get AI-enhanced results instantly.
+          Tags:
+            - ai
+            - text
+            - productivity
+            - clipboard
+            - hotkey
+            - paraphrase
+            - prompt
+          Installers:
+            - Architecture: x64
+              InstallerType: zip
+              InstallerUrl: $baseUrl/Turbophrase-$version-win-x64.zip
+              InstallerSha256: $x64Hash
+            - Architecture: arm64
+              InstallerType: zip
+              InstallerUrl: $baseUrl/Turbophrase-$version-win-arm64.zip
+              InstallerSha256: $arm64Hash
+          ManifestType: singleton
+          ManifestVersion: 1.6.0
+          "@
+          
+          $manifest | Out-File -FilePath "./artifacts/Turbophrase.Turbophrase.yaml" -Encoding utf8
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Turbophrase v${{ steps.version.outputs.VERSION }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          files: |
+            ./artifacts/**/*.zip
+            ./artifacts/**/*.sha256
+            ./artifacts/Turbophrase.Turbophrase.yaml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        runtime: [win-x64, win-arm64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore src/Turbophrase.slnx
+
+      - name: Build
+        run: dotnet build src/Turbophrase.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test src/Turbophrase.slnx --configuration Release --no-build --verbosity normal
+
+      - name: Publish ${{ matrix.runtime }}
+        run: |
+          dotnet publish src/Turbophrase/Turbophrase.csproj `
+            --configuration Release `
+            --runtime ${{ matrix.runtime }} `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            --output ./publish/${{ matrix.runtime }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Turbophrase-${{ matrix.runtime }}
+          path: ./publish/${{ matrix.runtime }}/
+          retention-days: 7

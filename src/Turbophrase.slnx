@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="Turbophrase.Core/Turbophrase.Core.csproj" />
+    <Project Path="Turbophrase.Providers/Turbophrase.Providers.csproj" />
+    <Project Path="Turbophrase/Turbophrase.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="../tests/Turbophrase.Core.Tests/Turbophrase.Core.Tests.csproj" />
+    <Project Path="../tests/Turbophrase.Providers.Tests/Turbophrase.Providers.Tests.csproj" />
+  </Folder>
+</Solution>

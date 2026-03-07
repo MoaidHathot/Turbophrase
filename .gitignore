@@ -416,3 +416,29 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Rider / JetBrains
+.idea/
+*.sln.iml
+
+# NuGet cache
+.nuget/
+
+# Test coverage directories
+coverage*/
+
+# Windows system files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Additional temporary files
+*.temp
+
+# Publish profiles (user-specific)
+*.pubxml.user
