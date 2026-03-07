@@ -1,3 +1,4 @@
+using System.Reflection;
 using Turbophrase.Core.Configuration;
 using Turbophrase.Services;
 
@@ -36,7 +37,7 @@ public class TrayApplicationContext : ApplicationContext
             // Create tray icon with context menu
             _trayIcon = new NotifyIcon
             {
-                Icon = SystemIcons.Application, // Use system icon for reliability
+                Icon = LoadApplicationIcon(),
                 Visible = true,
                 Text = "Turbophrase - AI Text Transformer",
                 ContextMenuStrip = CreateContextMenu()
@@ -435,6 +436,30 @@ public class TrayApplicationContext : ApplicationContext
         }
 
         return Icon.FromHandle(bitmap.GetHicon());
+    }
+
+    private static Icon LoadApplicationIcon()
+    {
+        try
+        {
+            // Try to load embedded icon resource
+            var assembly = Assembly.GetExecutingAssembly();
+            using var stream = assembly.GetManifestResourceStream("Turbophrase.Resources.Turbophrase.png");
+            if (stream != null)
+            {
+                using var bitmap = new Bitmap(stream);
+                // Resize to appropriate icon size
+                using var resized = new Bitmap(bitmap, new Size(32, 32));
+                return Icon.FromHandle(resized.GetHicon());
+            }
+        }
+        catch
+        {
+            // Fall through to fallback
+        }
+
+        // Fallback to programmatically created icon
+        return CreateTrayIcon();
     }
 
     protected override void Dispose(bool disposing)
