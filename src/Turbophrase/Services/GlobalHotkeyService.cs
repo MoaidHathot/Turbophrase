@@ -9,7 +9,7 @@ namespace Turbophrase.Services;
 public class GlobalHotkeyService : IDisposable
 {
     // Windows API imports
-    [DllImport("user32.dll")]
+    [DllImport("user32.dll", SetLastError = true)]
     private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
 
     [DllImport("user32.dll")]
@@ -44,6 +44,7 @@ public class GlobalHotkeyService : IDisposable
     {
         if (!TryParseHotkey(binding.Keys, out var modifiers, out var key))
         {
+            System.Diagnostics.Debug.WriteLine($"[Hotkey] Failed to parse: '{binding.Keys}'");
             return false;
         }
 
@@ -51,9 +52,12 @@ public class GlobalHotkeyService : IDisposable
         if (RegisterHotKey(_windowHandle, id, modifiers, key))
         {
             _registeredHotkeys[id] = binding;
+            System.Diagnostics.Debug.WriteLine($"[Hotkey] Registered: '{binding.Keys}' -> {binding.Preset} (id={id}, mod=0x{modifiers:X}, key=0x{key:X})");
             return true;
         }
 
+        var error = Marshal.GetLastWin32Error();
+        System.Diagnostics.Debug.WriteLine($"[Hotkey] Failed to register: '{binding.Keys}' -> {binding.Preset} (mod=0x{modifiers:X}, key=0x{key:X}, error={error})");
         return false;
     }
 
@@ -64,8 +68,11 @@ public class GlobalHotkeyService : IDisposable
     /// <returns>List of successfully registered bindings.</returns>
     public List<HotkeyBinding> RegisterHotkeys(IEnumerable<HotkeyBinding> bindings)
     {
+        var bindingsList = bindings.ToList();
+        System.Diagnostics.Debug.WriteLine($"[Hotkey] Attempting to register {bindingsList.Count} hotkeys (handle=0x{_windowHandle:X})");
+        
         var registered = new List<HotkeyBinding>();
-        foreach (var binding in bindings)
+        foreach (var binding in bindingsList)
         {
             if (RegisterHotkey(binding))
             {

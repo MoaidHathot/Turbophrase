@@ -72,6 +72,67 @@ Turbophrase.exe --config "C:\path\to\config.json" --init-config
 
 Hotkeys can be customized in the configuration file.
 
+## Custom Presets and Hotkeys
+
+You can define your own text transformations and hotkeys in `config.json`.
+
+### Adding a Custom Preset
+
+Presets define the AI prompt used for transformation. Each preset can optionally use a different provider:
+
+```json
+{
+  "presets": {
+    "grammar": {
+      "name": "Fix Grammar",
+      "systemPrompt": "Fix all grammar, spelling, and punctuation errors. Return ONLY the corrected text.",
+      "provider": null
+    },
+    "translate-spanish": {
+      "name": "Translate to Spanish",
+      "systemPrompt": "Translate the following text to Spanish. Return ONLY the translated text.",
+      "provider": null
+    },
+    "summarize": {
+      "name": "Summarize",
+      "systemPrompt": "Summarize the following text in 2-3 sentences. Return ONLY the summary.",
+      "provider": "anthropic"
+    },
+    "code-review": {
+      "name": "Code Review",
+      "systemPrompt": "Review this code and suggest improvements. Be concise.",
+      "provider": "copilot"
+    }
+  }
+}
+```
+
+### Adding Custom Hotkeys
+
+Bind any key combination to any preset:
+
+```json
+{
+  "hotkeys": [
+    { "keys": "Ctrl+Shift+G", "preset": "grammar" },
+    { "keys": "Ctrl+Shift+P", "preset": "paraphrase" },
+    { "keys": "Ctrl+Shift+F", "preset": "formal" },
+    { "keys": "Ctrl+Shift+C", "preset": "casual" },
+    { "keys": "Ctrl+Alt+S", "preset": "translate-spanish" },
+    { "keys": "Ctrl+Alt+R", "preset": "summarize" },
+    { "keys": "Ctrl+Alt+C", "preset": "code-review" }
+  ]
+}
+```
+
+**Supported modifier keys:** `Ctrl`, `Alt`, `Shift`, `Win`
+
+**Example key combinations:**
+- `Ctrl+Shift+G`
+- `Ctrl+Alt+T`
+- `Win+Shift+P`
+- `Ctrl+Alt+Shift+X`
+
 ## Startup
 
 Run at Windows startup:
@@ -164,30 +225,51 @@ Control which notifications are shown in `config.json`:
 
 ### GitHub Copilot
 
-Uses your existing GitHub Copilot subscription. Requires the Copilot CLI to be installed and authenticated.
+Uses your existing GitHub Copilot subscription. Requires the GitHub Copilot CLI to be installed and authenticated.
 
 ```json
 {
   "providers": {
     "copilot": {
       "type": "copilot",
-      "model": "gpt-5-mini"
+      "model": "gpt-4o"
     }
   }
 }
 ```
 
+**Prerequisites:**
+
+- Active [GitHub Copilot subscription](https://github.com/features/copilot) (Individual, Business, or Enterprise)
+- GitHub Copilot CLI installed and authenticated
+
 **Setup:**
 
-1. Install the Copilot CLI via npm:
+1. Install the GitHub Copilot CLI via npm:
    ```powershell
    npm install -g @anthropic-ai/copilot-cli
    ```
+   Or download from [GitHub Copilot CLI releases](https://github.com/github/copilot-cli/releases)
+
 2. Authenticate with your GitHub account:
    ```powershell
    copilot auth login
    ```
-3. No API key required - uses your GitHub Copilot subscription
+
+3. Verify it's working:
+   ```powershell
+   copilot --version
+   ```
+
+**Version Compatibility:**
+
+The Copilot CLI and SDK versions should be compatible. Turbophrase uses GitHub.Copilot.SDK v0.1.32, which bundles the matching CLI version. If you experience issues, ensure your globally installed CLI is up to date.
+
+| Turbophrase Version | SDK Version | Bundled CLI Version |
+|---------------------|-------------|---------------------|
+| 1.0.0               | 0.1.32      | 1.0.2               |
+
+**Note:** No API key is required - authentication is handled through your GitHub account via the CLI.
 
 ## CLI Reference
 

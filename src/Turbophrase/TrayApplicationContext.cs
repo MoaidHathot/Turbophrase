@@ -442,14 +442,31 @@ public class TrayApplicationContext : ApplicationContext
     {
         try
         {
-            // Try to load embedded icon resource
+            // Try to load embedded ICO resource (supports multiple resolutions)
+            var assembly = Assembly.GetExecutingAssembly();
+            using var stream = assembly.GetManifestResourceStream("Turbophrase.Resources.Turbophrase.ico");
+            if (stream != null)
+            {
+                // Load the full icon without specifying size - let NotifyIcon handle scaling
+                // This preserves all icon sizes in the ICO for Windows to select the best match
+                var icon = new Icon(stream);
+                return icon;
+            }
+        }
+        catch
+        {
+            // Fall through to PNG fallback
+        }
+
+        try
+        {
+            // Fallback: Try PNG resource
             var assembly = Assembly.GetExecutingAssembly();
             using var stream = assembly.GetManifestResourceStream("Turbophrase.Resources.Turbophrase.png");
             if (stream != null)
             {
                 using var bitmap = new Bitmap(stream);
-                // Resize to appropriate icon size
-                using var resized = new Bitmap(bitmap, new Size(32, 32));
+                using var resized = new Bitmap(bitmap, new Size(256, 256));
                 return Icon.FromHandle(resized.GetHicon());
             }
         }
