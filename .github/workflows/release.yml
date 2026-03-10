@@ -61,11 +61,13 @@ jobs:
       - name: Build Installer
         run: |
           $arch = "${{ matrix.runtime }}".Replace("win-", "")
+          $repoRoot = (Get-Location).Path
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
             /DVersion="${{ steps.version.outputs.VERSION }}" `
             /DArchitecture="$arch" `
-            /DSourcePath="./publish/${{ matrix.runtime }}" `
-            /O"." `
+            /DSourcePath="$repoRoot\publish\${{ matrix.runtime }}" `
+            /DRepoRoot="$repoRoot" `
+            /O"$repoRoot" `
             /F"Turbophrase-${{ steps.version.outputs.VERSION }}-${{ matrix.runtime }}-setup" `
             installer/Turbophase.iss
 

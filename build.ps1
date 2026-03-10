@@ -127,11 +127,16 @@ foreach ($rid in $runtimes) {
         $installerName = "Turbophrase-$Version-$rid-setup"
         Write-Host "Creating $installerName.exe..." -ForegroundColor Cyan
         
+        $repoRoot = (Get-Location).Path
+        $fullPublishDir = (Resolve-Path $publishDir).Path
+        $fullOutputDir = (Resolve-Path $OutputDir).Path
+        
         & $isccPath `
             /DVersion="$Version" `
             /DArchitecture="$arch" `
-            /DSourcePath="$publishDir" `
-            /O"$OutputDir" `
+            /DSourcePath="$fullPublishDir" `
+            /DRepoRoot="$repoRoot" `
+            /O"$fullOutputDir" `
             /F"$installerName" `
             /Q `
             installer/Turbophase.iss

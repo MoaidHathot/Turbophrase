@@ -13,6 +13,10 @@
   #define SourcePath "..\publish"
 #endif
 
+#ifndef RepoRoot
+  #define RepoRoot ".."
+#endif
+
 [Setup]
 ; Application info
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
@@ -26,10 +30,10 @@ AppUpdatesURL=https://github.com/MoaidHathot/Turbophrase/releases
 DefaultDirName={autopf}\Turbophrase
 DefaultGroupName=Turbophrase
 DisableProgramGroupPage=yes
-LicenseFile=..\LICENSE
-OutputDir=..\artifacts
+LicenseFile={#RepoRoot}\LICENSE
+OutputDir={#RepoRoot}\artifacts
 OutputBaseFilename=Turbophrase-{#Version}-{#Architecture}-setup
-SetupIconFile=..\src\Turbophrase\Resources\Turbophrase.ico
+SetupIconFile={#RepoRoot}\src\Turbophrase\Resources\Turbophrase.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
