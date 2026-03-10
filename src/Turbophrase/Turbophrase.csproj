@@ -13,6 +13,19 @@
   <ItemGroup>
     <EmbeddedResource Include="Resources\Turbophrase.ico" />
     <EmbeddedResource Include="Resources\Turbophrase.png" />
+    <!-- Copy icons to output for tray and toast notifications -->
+    <Content Include="Resources\Turbophrase.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Turbophrase.ico</Link>
+    </Content>
+    <Content Include="Resources\Turbophrase.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Turbophrase.png</Link>
+    </Content>
+    <Content Include="Resources\Turbophrase_toast.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Turbophrase_toast.png</Link>
+    </Content>
   </ItemGroup>
 
   <PropertyGroup>

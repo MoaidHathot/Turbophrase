@@ -50,15 +50,32 @@ jobs:
             -p:Version=${{ steps.version.outputs.VERSION }} `
             --output ./publish/${{ matrix.runtime }}
 
-      - name: Create ZIP archive
+      - name: Create ZIP archive (Portable)
         run: |
-          Compress-Archive -Path ./publish/${{ matrix.runtime }}/* -DestinationPath ./Turbophrase-${{ steps.version.outputs.VERSION }}-${{ matrix.runtime }}.zip
+          Compress-Archive -Path ./publish/${{ matrix.runtime }}/* -DestinationPath ./Turbophrase-${{ steps.version.outputs.VERSION }}-${{ matrix.runtime }}-portable.zip
 
-      - name: Upload artifact
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup -y --no-progress
+
+      - name: Build Installer
+        run: |
+          $arch = "${{ matrix.runtime }}".Replace("win-", "")
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            /DVersion="${{ steps.version.outputs.VERSION }}" `
+            /DArchitecture="$arch" `
+            /DSourcePath="./publish/${{ matrix.runtime }}" `
+            /O"." `
+            /F"Turbophrase-${{ steps.version.outputs.VERSION }}-${{ matrix.runtime }}-setup" `
+            installer/Turbophase.iss
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Turbophrase-${{ matrix.runtime }}
-          path: ./Turbophrase-${{ steps.version.outputs.VERSION }}-${{ matrix.runtime }}.zip
+          path: |
+            ./Turbophrase-${{ steps.version.outputs.VERSION }}-${{ matrix.runtime }}-portable.zip
+            ./Turbophrase-${{ steps.version.outputs.VERSION }}-${{ matrix.runtime }}-setup.exe
 
   release:
     needs: build
@@ -81,7 +98,7 @@ jobs:
 
       - name: Generate SHA256 checksums
         run: |
-          $files = Get-ChildItem -Path ./artifacts -Recurse -Filter *.zip
+          $files = Get-ChildItem -Path ./artifacts -Recurse -Include *.zip,*.exe
           foreach ($file in $files) {
             $hash = Get-FileHash -Path $file.FullName -Algorithm SHA256
             "$($hash.Hash)  $($file.Name)" | Out-File -FilePath "./artifacts/$($file.Name).sha256" -Encoding utf8
@@ -90,11 +107,11 @@ jobs:
       - name: Generate winget manifest
         run: |
           $version = "${{ steps.version.outputs.VERSION }}"
-          $x64Zip = Get-ChildItem -Path ./artifacts -Recurse -Filter "*win-x64.zip" | Select-Object -First 1
-          $arm64Zip = Get-ChildItem -Path ./artifacts -Recurse -Filter "*win-arm64.zip" | Select-Object -First 1
+          $x64Setup = Get-ChildItem -Path ./artifacts -Recurse -Filter "*win-x64-setup.exe" | Select-Object -First 1
+          $arm64Setup = Get-ChildItem -Path ./artifacts -Recurse -Filter "*win-arm64-setup.exe" | Select-Object -First 1
           
-          $x64Hash = (Get-FileHash -Path $x64Zip.FullName -Algorithm SHA256).Hash
-          $arm64Hash = (Get-FileHash -Path $arm64Zip.FullName -Algorithm SHA256).Hash
+          $x64Hash = (Get-FileHash -Path $x64Setup.FullName -Algorithm SHA256).Hash
+          $arm64Hash = (Get-FileHash -Path $arm64Setup.FullName -Algorithm SHA256).Hash
           
           $baseUrl = "https://github.com/MoaidHathot/Turbophrase/releases/download/v$version"
           
@@ -125,13 +142,15 @@ jobs:
             - prompt
           Installers:
             - Architecture: x64
-              InstallerType: zip
-              InstallerUrl: $baseUrl/Turbophrase-$version-win-x64.zip
+              InstallerType: inno
+              InstallerUrl: $baseUrl/Turbophrase-$version-win-x64-setup.exe
               InstallerSha256: $x64Hash
+              Scope: user
             - Architecture: arm64
-              InstallerType: zip
-              InstallerUrl: $baseUrl/Turbophrase-$version-win-arm64.zip
+              InstallerType: inno
+              InstallerUrl: $baseUrl/Turbophrase-$version-win-arm64-setup.exe
               InstallerSha256: $arm64Hash
+              Scope: user
           ManifestType: singleton
           ManifestVersion: 1.6.0
           "@
@@ -147,6 +166,7 @@ jobs:
           generate_release_notes: true
           files: |
             ./artifacts/**/*.zip
+            ./artifacts/**/*.exe
             ./artifacts/**/*.sha256
             ./artifacts/Turbophrase.Turbophrase.yaml
         env:

@@ -10,6 +10,11 @@ static class Program
     [STAThread]
     static int Main(string[] args)
     {
+        // Enable high DPI support for proper icon scaling
+        Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
+
         // Parse --config and --init-config arguments
         string? customConfigPath = null;
         bool initConfigIfMissing = false;

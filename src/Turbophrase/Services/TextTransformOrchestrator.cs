@@ -158,15 +158,55 @@ public class TextTransformOrchestrator
     {
         try
         {
-            new ToastContentBuilder()
+            var builder = new ToastContentBuilder()
                 .AddText(title)
-                .AddText(message)
-                .Show();
+                .AddText(message);
+
+            // Add app icon if available (use PNG, no circle crop for this icon design)
+            var iconPath = GetAppIconPath();
+            System.Diagnostics.Debug.WriteLine($"Toast icon path: {iconPath}");
+            if (iconPath != null)
+            {
+                builder.AddAppLogoOverride(new Uri(iconPath), ToastGenericAppLogoCrop.None);
+            }
+
+            builder.Show();
         }
         catch
         {
             // Fallback: If toast notifications fail, we silently ignore
             // The user will still see the result of the operation
         }
+    }
+
+    /// <summary>
+    /// Gets the path to the app icon for notifications.
+    /// </summary>
+    private static string? GetAppIconPath()
+    {
+        try
+        {
+            var appDir = AppContext.BaseDirectory;
+
+            // Prefer dedicated toast PNG (64x64, optimized for notifications)
+            var iconPath = Path.Combine(appDir, "Turbophrase_toast.png");
+            if (File.Exists(iconPath))
+            {
+                return iconPath;
+            }
+
+            // Fallback to main PNG
+            iconPath = Path.Combine(appDir, "Turbophrase.png");
+            if (File.Exists(iconPath))
+            {
+                return iconPath;
+            }
+        }
+        catch
+        {
+            // Ignore
+        }
+
+        return null;
     }
 }

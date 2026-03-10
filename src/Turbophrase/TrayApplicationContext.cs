@@ -442,15 +442,32 @@ public class TrayApplicationContext : ApplicationContext
     {
         try
         {
-            // Try to load embedded ICO resource (supports multiple resolutions)
+            // Load ICO from file system (not embedded) for best quality
+            var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+            if (exePath != null)
+            {
+                var dir = Path.GetDirectoryName(exePath);
+                var icoPath = Path.Combine(dir!, "Turbophrase.ico");
+                if (File.Exists(icoPath))
+                {
+                    // Load directly from file - preserves all icon sizes
+                    return new Icon(icoPath);
+                }
+            }
+        }
+        catch
+        {
+            // Fall through
+        }
+
+        try
+        {
+            // Try to load embedded ICO resource
             var assembly = Assembly.GetExecutingAssembly();
-            using var stream = assembly.GetManifestResourceStream("Turbophrase.Resources.Turbophrase.ico");
+            var stream = assembly.GetManifestResourceStream("Turbophrase.Resources.Turbophrase.ico");
             if (stream != null)
             {
-                // Load the full icon without specifying size - let NotifyIcon handle scaling
-                // This preserves all icon sizes in the ICO for Windows to select the best match
-                var icon = new Icon(stream);
-                return icon;
+                return new Icon(stream);
             }
         }
         catch
@@ -466,7 +483,7 @@ public class TrayApplicationContext : ApplicationContext
             if (stream != null)
             {
                 using var bitmap = new Bitmap(stream);
-                using var resized = new Bitmap(bitmap, new Size(256, 256));
+                using var resized = new Bitmap(bitmap, new Size(32, 32));
                 return Icon.FromHandle(resized.GetHicon());
             }
         }
