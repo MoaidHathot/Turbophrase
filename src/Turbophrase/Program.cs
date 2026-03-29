@@ -132,7 +132,7 @@ static class Program
             case "version":
             case "--version":
             case "-v":
-                Console.WriteLine("Turbophrase v1.0.0");
+                Console.WriteLine("Turbophrase v1.0.2");
                 return 0;
 
             default:
@@ -320,7 +320,10 @@ static class Program
                                (use with --config to specify the path)
 
             Configuration:
-              Default config file: %APPDATA%\Turbophrase\config.json
+              Config file lookup order:
+                1. --config <path>       (explicit path)
+                2. XDG_CONFIG_HOME/Turbophrase/config.json (if env var set and file exists)
+                3. %APPDATA%\Turbophrase\config.json       (default)
               Supports environment variable substitution: ${OPENAI_API_KEY}
 
             Default hotkeys:

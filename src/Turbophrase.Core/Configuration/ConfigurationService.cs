@@ -22,16 +22,69 @@ public partial class ConfigurationService
     });
 
     /// <summary>
-    /// Gets the configuration directory path.
+    /// Gets the configuration directory path resolved using the fallback chain:
+    /// 1. Custom path (--config), 2. XDG_CONFIG_HOME, 3. %APPDATA% default.
     /// </summary>
     public static string ConfigDirectory => _customConfigFilePath != null
         ? Path.GetDirectoryName(_customConfigFilePath) ?? DefaultConfigDirectoryLazy.Value
-        : DefaultConfigDirectoryLazy.Value;
+        : ResolveConfigDirectory();
 
     /// <summary>
-    /// Gets the full path to the configuration file.
+    /// Gets the full path to the configuration file resolved using the fallback chain:
+    /// 1. Custom path (--config), 2. XDG_CONFIG_HOME (if set and config exists), 3. %APPDATA% default.
     /// </summary>
-    public static string ConfigFilePath => _customConfigFilePath ?? Path.Combine(DefaultConfigDirectoryLazy.Value, ConfigFileName);
+    public static string ConfigFilePath => _customConfigFilePath ?? ResolveConfigFilePath();
+
+    /// <summary>
+    /// Gets the XDG_CONFIG_HOME-based configuration directory, or null if the variable is not set.
+    /// </summary>
+    public static string? XdgConfigDirectory
+    {
+        get
+        {
+            var xdgConfigHome = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+            if (string.IsNullOrEmpty(xdgConfigHome))
+                return null;
+
+            return Path.Combine(xdgConfigHome, AppName);
+        }
+    }
+
+    /// <summary>
+    /// Resolves the configuration directory using XDG_CONFIG_HOME fallback.
+    /// Returns the XDG directory if the env var is set and a config file exists there,
+    /// otherwise returns the default %APPDATA% directory.
+    /// </summary>
+    private static string ResolveConfigDirectory()
+    {
+        var xdgDir = XdgConfigDirectory;
+        if (xdgDir != null && File.Exists(Path.Combine(xdgDir, ConfigFileName)))
+        {
+            return xdgDir;
+        }
+
+        return DefaultConfigDirectoryLazy.Value;
+    }
+
+    /// <summary>
+    /// Resolves the configuration file path using XDG_CONFIG_HOME fallback.
+    /// Returns the XDG config path if the env var is set and the file exists there,
+    /// otherwise returns the default %APPDATA% config path.
+    /// </summary>
+    private static string ResolveConfigFilePath()
+    {
+        var xdgDir = XdgConfigDirectory;
+        if (xdgDir != null)
+        {
+            var xdgConfigPath = Path.Combine(xdgDir, ConfigFileName);
+            if (File.Exists(xdgConfigPath))
+            {
+                return xdgConfigPath;
+            }
+        }
+
+        return Path.Combine(DefaultConfigDirectoryLazy.Value, ConfigFileName);
+    }
 
     /// <summary>
     /// Sets a custom configuration file path.

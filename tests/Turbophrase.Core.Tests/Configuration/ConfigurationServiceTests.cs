@@ -190,4 +190,205 @@ public class ConfigurationServiceTests
             field?.SetValue(null, originalPath);
         }
     }
+
+    [Fact]
+    public void XdgConfigDirectory_ReturnsNull_WhenEnvVarNotSet()
+    {
+        var originalValue = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+        try
+        {
+            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", null);
+
+            Assert.Null(ConfigurationService.XdgConfigDirectory);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", originalValue);
+        }
+    }
+
+    [Fact]
+    public void XdgConfigDirectory_ReturnsNull_WhenEnvVarEmpty()
+    {
+        var originalValue = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+        try
+        {
+            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", "");
+
+            Assert.Null(ConfigurationService.XdgConfigDirectory);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", originalValue);
+        }
+    }
+
+    [Fact]
+    public void XdgConfigDirectory_ReturnsCombinedPath_WhenEnvVarSet()
+    {
+        var originalValue = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+        try
+        {
+            var xdgPath = Path.Combine(Path.GetTempPath(), "xdg-test-" + Guid.NewGuid());
+            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", xdgPath);
+
+            var expected = Path.Combine(xdgPath, "Turbophrase");
+            Assert.Equal(expected, ConfigurationService.XdgConfigDirectory);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", originalValue);
+        }
+    }
+
+    [Fact]
+    public void ConfigFilePath_UsesXdgPath_WhenEnvVarSetAndConfigExists()
+    {
+        var originalValue = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+        var originalCustomPath = ConfigurationService.CustomConfigFilePath;
+        string? tempDir = null;
+        try
+        {
+            // Clear custom config path so XDG resolution runs
+            var field = typeof(ConfigurationService).GetField("_customConfigFilePath",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            field?.SetValue(null, null);
+
+            // Create a temp XDG directory with a config file
+            tempDir = Path.Combine(Path.GetTempPath(), "xdg-test-" + Guid.NewGuid());
+            var turbophraseDir = Path.Combine(tempDir, "Turbophrase");
+            Directory.CreateDirectory(turbophraseDir);
+            File.WriteAllText(Path.Combine(turbophraseDir, "config.json"), "{}");
+
+            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", tempDir);
+
+            var expectedPath = Path.Combine(turbophraseDir, "config.json");
+            Assert.Equal(expectedPath, ConfigurationService.ConfigFilePath);
+            Assert.Equal(turbophraseDir, ConfigurationService.ConfigDirectory);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", originalValue);
+            var field = typeof(ConfigurationService).GetField("_customConfigFilePath",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            field?.SetValue(null, originalCustomPath);
+            if (tempDir != null && Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ConfigFilePath_FallsBackToDefault_WhenXdgSetButNoConfigFile()
+    {
+        var originalValue = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+        var originalCustomPath = ConfigurationService.CustomConfigFilePath;
+        string? tempDir = null;
+        try
+        {
+            // Clear custom config path so XDG resolution runs
+            var field = typeof(ConfigurationService).GetField("_customConfigFilePath",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            field?.SetValue(null, null);
+
+            // Create a temp XDG directory WITHOUT a config file
+            tempDir = Path.Combine(Path.GetTempPath(), "xdg-test-" + Guid.NewGuid());
+            var turbophraseDir = Path.Combine(tempDir, "Turbophrase");
+            Directory.CreateDirectory(turbophraseDir);
+
+            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", tempDir);
+
+            // Should NOT use the XDG path since no config file exists there
+            var xdgPath = Path.Combine(turbophraseDir, "config.json");
+            Assert.NotEqual(xdgPath, ConfigurationService.ConfigFilePath);
+
+            // Should fall back to the default %APPDATA% path
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var expectedDefault = Path.Combine(appData, "Turbophrase", "config.json");
+            Assert.Equal(expectedDefault, ConfigurationService.ConfigFilePath);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", originalValue);
+            var field = typeof(ConfigurationService).GetField("_customConfigFilePath",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            field?.SetValue(null, originalCustomPath);
+            if (tempDir != null && Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ConfigFilePath_CustomPathTakesPrecedence_OverXdg()
+    {
+        var originalValue = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+        var originalCustomPath = ConfigurationService.CustomConfigFilePath;
+        string? tempDir = null;
+        try
+        {
+            // Create a temp XDG directory with a config file
+            tempDir = Path.Combine(Path.GetTempPath(), "xdg-test-" + Guid.NewGuid());
+            var turbophraseDir = Path.Combine(tempDir, "Turbophrase");
+            Directory.CreateDirectory(turbophraseDir);
+            File.WriteAllText(Path.Combine(turbophraseDir, "config.json"), "{}");
+
+            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", tempDir);
+
+            // Set a custom config path -- this should take precedence
+            var customPath = Path.Combine(Path.GetTempPath(), "custom-config-" + Guid.NewGuid() + ".json");
+            ConfigurationService.SetCustomConfigPath(customPath);
+
+            Assert.Equal(customPath, ConfigurationService.ConfigFilePath);
+            var xdgPath = Path.Combine(turbophraseDir, "config.json");
+            Assert.NotEqual(xdgPath, ConfigurationService.ConfigFilePath);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", originalValue);
+            var field = typeof(ConfigurationService).GetField("_customConfigFilePath",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            field?.SetValue(null, originalCustomPath);
+            if (tempDir != null && Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void LoadConfiguration_UsesXdgConfig_WhenEnvVarSetAndConfigExists()
+    {
+        var originalValue = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+        var originalCustomPath = ConfigurationService.CustomConfigFilePath;
+        string? tempDir = null;
+        try
+        {
+            // Clear custom config path so XDG resolution runs
+            var field = typeof(ConfigurationService).GetField("_customConfigFilePath",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            field?.SetValue(null, null);
+
+            // Create a temp XDG directory with a config file that has a custom default provider
+            tempDir = Path.Combine(Path.GetTempPath(), "xdg-test-" + Guid.NewGuid());
+            var turbophraseDir = Path.Combine(tempDir, "Turbophrase");
+            Directory.CreateDirectory(turbophraseDir);
+            File.WriteAllText(Path.Combine(turbophraseDir, "config.json"), """
+                {
+                  "defaultProvider": "anthropic"
+                }
+                """);
+
+            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", tempDir);
+
+            var config = ConfigurationService.LoadConfiguration();
+
+            Assert.Equal("anthropic", config.DefaultProvider);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", originalValue);
+            var field = typeof(ConfigurationService).GetField("_customConfigFilePath",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            field?.SetValue(null, originalCustomPath);
+            if (tempDir != null && Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
 }
