@@ -31,20 +31,22 @@ winget install Turbophrase.Turbophrase
 
 On first run, Turbophrase creates a configuration file at `%APPDATA%\Turbophrase\config.json`.
 
-### API Keys
+### Config File Location
 
-Configure your AI provider by adding your API key to the config file. You can use environment variables:
+Turbophrase resolves the configuration file using the following lookup order:
 
-```json
-{
-  "providers": {
-    "openai": {
-      "apiKey": "${OPENAI_API_KEY}",
-      "model": "gpt-4o-mini"
-    }
-  },
-  "defaultProvider": "openai"
-}
+| Priority | Location | Description |
+|----------|----------|-------------|
+| 1 | `--config <path>` | Explicit path passed as a CLI argument |
+| 2 | `XDG_CONFIG_HOME/Turbophrase/config.json` | Used if the `XDG_CONFIG_HOME` environment variable is set **and** the file exists |
+| 3 | `%APPDATA%\Turbophrase\config.json` | Default location |
+
+The `XDG_CONFIG_HOME` support allows you to keep your config in a shared dotfiles directory or a custom location without passing `--config` every time:
+
+```powershell
+# Example: store config under your dotfiles
+$env:XDG_CONFIG_HOME = "C:\Users\you\.config"
+# Turbophrase will look for: C:\Users\you\.config\Turbophrase\config.json
 ```
 
 ### Custom Config Path
@@ -60,6 +62,38 @@ Create a default config file at a custom path:
 ```powershell
 Turbophrase.exe --config "C:\path\to\config.json" --init-config
 ```
+
+### API Keys
+
+Configure your AI provider by adding your API key to the config file. You can use environment variable references with the `${VAR_NAME}` syntax:
+
+```json
+{
+  "providers": {
+    "openai": {
+      "apiKey": "${OPENAI_API_KEY}",
+      "model": "gpt-4o-mini"
+    }
+  },
+  "defaultProvider": "openai"
+}
+```
+
+This works for any provider property -- `apiKey`, `endpoint`, `model`, and `deploymentName` all support `${...}` substitution.
+
+### Environment Variable Overrides
+
+In addition to `${...}` substitution in the config file, Turbophrase reads environment variables prefixed with `TURBOPHRASE_` and maps them to configuration properties. This lets you override any config value without editing the file:
+
+```powershell
+# Override the default provider
+$env:TURBOPHRASE_DEFAULTPROVIDER = "anthropic"
+
+# Override a provider's API key
+$env:TURBOPHRASE_PROVIDERS__OPENAI__APIKEY = "sk-..."
+```
+
+The mapping follows the [.NET configuration](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/configuration/) naming convention: use double underscores (`__`) to separate nested keys.
 
 ## Default Hotkeys
 
