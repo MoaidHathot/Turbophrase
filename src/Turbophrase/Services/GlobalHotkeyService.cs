@@ -45,6 +45,7 @@ public class GlobalHotkeyService : IDisposable
         if (!TryParseHotkey(binding.Keys, out var modifiers, out var key))
         {
             System.Diagnostics.Debug.WriteLine($"[Hotkey] Failed to parse: '{binding.Keys}'");
+            RuntimeLog.Write($"hotkey-parse-failed keys='{binding.Keys}'");
             return false;
         }
 
@@ -53,11 +54,13 @@ public class GlobalHotkeyService : IDisposable
         {
             _registeredHotkeys[id] = binding;
             System.Diagnostics.Debug.WriteLine($"[Hotkey] Registered: '{binding.Keys}' -> {binding.Preset} (id={id}, mod=0x{modifiers:X}, key=0x{key:X})");
+            RuntimeLog.Write($"hotkey-registered id={id} keys='{binding.Keys}' action='{binding.Action ?? "preset"}' preset='{binding.Preset}'");
             return true;
         }
 
         var error = Marshal.GetLastWin32Error();
         System.Diagnostics.Debug.WriteLine($"[Hotkey] Failed to register: '{binding.Keys}' -> {binding.Preset} (mod=0x{modifiers:X}, key=0x{key:X}, error={error})");
+        RuntimeLog.Write($"hotkey-register-failed keys='{binding.Keys}' action='{binding.Action ?? "preset"}' preset='{binding.Preset}' error={error}");
         return false;
     }
 
@@ -90,7 +93,12 @@ public class GlobalHotkeyService : IDisposable
     {
         if (_registeredHotkeys.TryGetValue(hotkeyId, out var binding))
         {
+            RuntimeLog.Write($"hotkey-pressed id={hotkeyId} keys='{binding.Keys}' action='{binding.Action ?? "preset"}' preset='{binding.Preset}'");
             HotkeyPressed?.Invoke(this, new HotkeyPressedEventArgs(binding));
+        }
+        else
+        {
+            RuntimeLog.Write($"hotkey-pressed-unknown id={hotkeyId}");
         }
     }
 

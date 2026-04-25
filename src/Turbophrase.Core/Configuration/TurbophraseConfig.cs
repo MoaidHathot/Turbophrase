@@ -29,6 +29,24 @@ public class TurbophraseConfig
     /// Notification settings for controlling which notifications to show.
     /// </summary>
     public NotificationSettings Notifications { get; set; } = new();
+
+    /// <summary>
+    /// Settings for the custom prompt action.
+    /// </summary>
+    public CustomPromptSettings CustomPrompt { get; set; } = new();
+}
+
+/// <summary>
+/// Settings for the custom prompt action flow.
+/// </summary>
+public class CustomPromptSettings
+{
+    /// <summary>
+    /// System prompt template used for custom prompt actions.
+    /// Supports the placeholders {instruction} and {text}.
+    /// </summary>
+    public string SystemPromptTemplate { get; set; } =
+        "You are a text transformation assistant. Apply the following instruction to the provided text. Return ONLY the transformed text with no explanation or commentary.\n\nInstruction:\n{instruction}\n\nText:\n{text}";
 }
 
 /// <summary>

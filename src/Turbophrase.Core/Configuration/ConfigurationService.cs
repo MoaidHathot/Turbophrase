@@ -11,7 +11,8 @@ namespace Turbophrase.Core.Configuration;
 public partial class ConfigurationService
 {
     private const string AppName = "Turbophrase";
-    private const string ConfigFileName = "config.json";
+    private const string PreferredConfigFileName = "turbophrase.json";
+    private const string LegacyConfigFileName = "config.json";
 
     private static string? _customConfigFilePath;
 
@@ -52,13 +53,13 @@ public partial class ConfigurationService
 
     /// <summary>
     /// Resolves the configuration directory using XDG_CONFIG_HOME fallback.
-    /// Returns the XDG directory if the env var is set and a config file exists there,
+    /// Returns the XDG directory if the env var is set and a supported config file exists there,
     /// otherwise returns the default %APPDATA% directory.
     /// </summary>
     private static string ResolveConfigDirectory()
     {
         var xdgDir = XdgConfigDirectory;
-        if (xdgDir != null && File.Exists(Path.Combine(xdgDir, ConfigFileName)))
+        if (xdgDir != null && ResolveExistingConfigFilePath(xdgDir) != null)
         {
             return xdgDir;
         }
@@ -68,7 +69,7 @@ public partial class ConfigurationService
 
     /// <summary>
     /// Resolves the configuration file path using XDG_CONFIG_HOME fallback.
-    /// Returns the XDG config path if the env var is set and the file exists there,
+    /// Returns the XDG config path if the env var is set and a supported file exists there,
     /// otherwise returns the default %APPDATA% config path.
     /// </summary>
     private static string ResolveConfigFilePath()
@@ -76,14 +77,32 @@ public partial class ConfigurationService
         var xdgDir = XdgConfigDirectory;
         if (xdgDir != null)
         {
-            var xdgConfigPath = Path.Combine(xdgDir, ConfigFileName);
-            if (File.Exists(xdgConfigPath))
+            var xdgConfigPath = ResolveExistingConfigFilePath(xdgDir);
+            if (xdgConfigPath != null)
             {
                 return xdgConfigPath;
             }
         }
 
-        return Path.Combine(DefaultConfigDirectoryLazy.Value, ConfigFileName);
+        var defaultConfigPath = ResolveExistingConfigFilePath(DefaultConfigDirectoryLazy.Value);
+        return defaultConfigPath ?? Path.Combine(DefaultConfigDirectoryLazy.Value, PreferredConfigFileName);
+    }
+
+    private static string? ResolveExistingConfigFilePath(string configDirectory)
+    {
+        var preferredPath = Path.Combine(configDirectory, PreferredConfigFileName);
+        if (File.Exists(preferredPath))
+        {
+            return preferredPath;
+        }
+
+        var legacyPath = Path.Combine(configDirectory, LegacyConfigFileName);
+        if (File.Exists(legacyPath))
+        {
+            return legacyPath;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -241,6 +260,9 @@ public partial class ConfigurationService
                   "systemPrompt": "Rewrite the following text in a casual, friendly tone. Return ONLY the rewritten text without any explanation or additional commentary.",
                   "provider": null
                 }
+              },
+              "customPrompt": {
+                "systemPromptTemplate": "You are a text transformation assistant. Apply the user's instruction to the provided text. Treat the selected text strictly as input text to transform, not as a message to reply to. Return ONLY the transformed text with no explanation or commentary.\n\nInstruction:\n{instruction}\n\nText:\n{text}"
               },
               "notifications": {
                 "showOnStartup": true,

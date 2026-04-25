@@ -10,7 +10,13 @@ public class HotkeyBindingTests
         var binding = new HotkeyBinding();
 
         Assert.Equal(string.Empty, binding.Keys);
+        Assert.Null(binding.Action);
         Assert.Equal(string.Empty, binding.Preset);
+        Assert.Null(binding.Name);
+        Assert.Null(binding.SystemPromptTemplate);
+        Assert.Null(binding.Provider);
+        Assert.True(binding.IsPresetAction);
+        Assert.False(binding.IsCustomPromptAction);
     }
 
     [Fact]
@@ -33,6 +39,37 @@ public class HotkeyBindingTests
         };
 
         Assert.Equal("grammar", binding.Preset);
+    }
+
+    [Fact]
+    public void HotkeyBinding_CustomPromptAction_IsRecognized()
+    {
+        var binding = new HotkeyBinding
+        {
+            Keys = "Ctrl+Shift+K",
+            Action = "custom-prompt",
+            Name = "Ask AI"
+        };
+
+        Assert.True(binding.IsCustomPromptAction);
+        Assert.False(binding.IsPresetAction);
+        Assert.Equal("Ask AI", binding.Name);
+    }
+
+    [Fact]
+    public void HotkeyBinding_CustomPromptAction_CanSetTemplateAndProvider()
+    {
+        var binding = new HotkeyBinding
+        {
+            Keys = "Ctrl+Shift+L",
+            Action = "custom-prompt",
+            Name = "Summarize",
+            SystemPromptTemplate = "Instruction: {instruction}\nText: {text}",
+            Provider = "anthropic"
+        };
+
+        Assert.Equal("Instruction: {instruction}\nText: {text}", binding.SystemPromptTemplate);
+        Assert.Equal("anthropic", binding.Provider);
     }
 
     [Fact]

@@ -33,71 +33,70 @@ public class TextTransformOrchestrator
     public IEnumerable<string> AvailablePresets => _config.Presets.Keys;
 
     /// <summary>
+    /// Captures the currently selected text and remembers the source window.
+    /// </summary>
+    public async Task<SelectionCaptureResult> CaptureSelectedTextAsync()
+    {
+        var sourceWindowHandle = _clipboardService.GetActiveWindowHandle();
+        RuntimeLog.Write($"selection-capture-start hwnd=0x{sourceWindowHandle.ToInt64():X}");
+        var selectedText = await _clipboardService.GetSelectedTextAsync();
+        if (string.IsNullOrWhiteSpace(selectedText))
+        {
+            RuntimeLog.Write("selection-capture-empty");
+            return SelectionCaptureResult.Fail("No text is selected.");
+        }
+
+        RuntimeLog.Write($"selection-capture-success length={selectedText.Length}");
+        return SelectionCaptureResult.Ok(selectedText, sourceWindowHandle);
+    }
+
+    /// <summary>
     /// Transforms the currently selected text using the specified preset.
     /// </summary>
     /// <param name="presetName">The name of the preset to use.</param>
     /// <returns>The transformation result.</returns>
     public async Task<TransformResult> TransformSelectedTextAsync(string presetName)
     {
-        if (_isProcessing)
+        if (!_config.Presets.TryGetValue(presetName, out var preset))
         {
-            return TransformResult.Fail("A transformation is already in progress.");
+            RuntimeLog.Write($"preset-not-found preset='{presetName}'");
+            return TransformResult.Fail($"Preset '{presetName}' not found.");
         }
 
-        _isProcessing = true;
+        RuntimeLog.Write($"preset-transform-start preset='{presetName}' provider='{preset.Provider ?? _config.DefaultProvider}'");
 
-        try
+        var captureResult = await CaptureSelectedTextAsync();
+        if (!captureResult.Success)
         {
-            // Get the preset
-            if (!_config.Presets.TryGetValue(presetName, out var preset))
-            {
-                return TransformResult.Fail($"Preset '{presetName}' not found.");
-            }
-
-            // Get the provider for this preset
-            IAIProvider provider;
-            try
-            {
-                provider = ProviderFactory.GetProviderForPreset(preset, _config, _providers);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return TransformResult.Fail(ex.Message);
-            }
-
-            // Validate provider configuration
-            if (!provider.ValidateConfiguration())
-            {
-                return TransformResult.Fail($"Provider '{provider.Name}' is not properly configured.");
-            }
-
-            // Get selected text
-            var selectedText = await _clipboardService.GetSelectedTextAsync();
-            if (string.IsNullOrWhiteSpace(selectedText))
-            {
-                return TransformResult.Fail("No text is selected.");
-            }
-
-            // Transform the text
-            string transformedText;
-            try
-            {
-                transformedText = await provider.TransformTextAsync(selectedText, preset.SystemPrompt);
-            }
-            catch (Exception ex)
-            {
-                return TransformResult.Fail($"AI transformation failed: {ex.Message}", provider.Name);
-            }
-
-            // Replace the selected text
-            await _clipboardService.ReplaceSelectedTextAsync(transformedText);
-
-            return TransformResult.Ok(transformedText, provider.Name);
+            return TransformResult.Fail(captureResult.ErrorMessage ?? "No text is selected.");
         }
-        finally
+
+        return await TransformCapturedTextAsync(captureResult, preset.SystemPrompt, preset.Provider, restoreFocusBeforePaste: false);
+    }
+
+    /// <summary>
+    /// Transforms previously captured text using a user-supplied prompt.
+    /// </summary>
+    public Task<TransformResult> TransformCapturedTextAsync(
+        SelectionCaptureResult captureResult,
+        string prompt,
+        string? providerName = null,
+        bool restoreFocusBeforePaste = true)
+    {
+        if (!captureResult.Success || string.IsNullOrWhiteSpace(captureResult.SelectedText))
         {
-            _isProcessing = false;
+            RuntimeLog.Write($"custom-transform-invalid-capture error='{captureResult.ErrorMessage}'");
+            return Task.FromResult(TransformResult.Fail(captureResult.ErrorMessage ?? "No text is selected."));
         }
+
+        var preset = new PromptPreset
+        {
+            Name = "Custom Prompt",
+            SystemPrompt = prompt,
+            Provider = providerName
+        };
+
+        return TransformTextAsync(captureResult.SelectedText, preset, captureResult.SourceWindowHandle, restoreFocusBeforePaste);
     }
 
     /// <summary>
@@ -209,4 +208,105 @@ public class TextTransformOrchestrator
 
         return null;
     }
+
+    private async Task<TransformResult> TransformTextAsync(
+        string selectedText,
+        PromptPreset preset,
+        IntPtr sourceWindowHandle,
+        bool restoreFocusBeforePaste)
+    {
+        if (_isProcessing)
+        {
+            RuntimeLog.Write("transform-rejected already-processing");
+            return TransformResult.Fail("A transformation is already in progress.");
+        }
+
+        if (string.IsNullOrWhiteSpace(preset.SystemPrompt))
+        {
+            RuntimeLog.Write("transform-rejected empty-prompt");
+            return TransformResult.Fail("Prompt cannot be empty.");
+        }
+
+        _isProcessing = true;
+
+        try
+        {
+            IAIProvider provider;
+            try
+            {
+                provider = ProviderFactory.GetProviderForPreset(preset, _config, _providers);
+            }
+            catch (InvalidOperationException ex)
+            {
+                RuntimeLog.Write($"provider-resolution-failed error='{ex.Message}'");
+                return TransformResult.Fail(ex.Message);
+            }
+
+            if (!provider.ValidateConfiguration())
+            {
+                RuntimeLog.Write($"provider-invalid provider='{provider.Name}'");
+                return TransformResult.Fail($"Provider '{provider.Name}' is not properly configured.");
+            }
+
+            RuntimeLog.Write($"provider-transform-start provider='{provider.Name}' textLength={selectedText.Length} restoreFocus={restoreFocusBeforePaste}");
+
+            string transformedText;
+            try
+            {
+                transformedText = await provider.TransformTextAsync(selectedText, preset.SystemPrompt);
+            }
+            catch (Exception ex)
+            {
+                RuntimeLog.Write($"provider-transform-failed provider='{provider.Name}' error='{ex.Message}'");
+                return TransformResult.Fail($"AI transformation failed: {ex.Message}", provider.Name);
+            }
+
+            RuntimeLog.Write($"provider-transform-success provider='{provider.Name}' resultLength={transformedText.Length}");
+
+            if (restoreFocusBeforePaste)
+            {
+                RuntimeLog.Write($"restore-focus hwnd=0x{sourceWindowHandle.ToInt64():X}");
+                _clipboardService.RestoreWindowFocus(sourceWindowHandle);
+                await Task.Delay(100);
+            }
+
+            RuntimeLog.Write("paste-start");
+            await _clipboardService.ReplaceSelectedTextAsync(transformedText);
+            RuntimeLog.Write("paste-success");
+
+            return TransformResult.Ok(transformedText, provider.Name);
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+}
+
+/// <summary>
+/// Result of capturing the user's current text selection.
+/// </summary>
+public sealed class SelectionCaptureResult
+{
+    private SelectionCaptureResult(bool success, string? selectedText, IntPtr sourceWindowHandle, string? errorMessage)
+    {
+        Success = success;
+        SelectedText = selectedText;
+        SourceWindowHandle = sourceWindowHandle;
+        ErrorMessage = errorMessage;
+    }
+
+    public bool Success { get; }
+
+    public string? SelectedText { get; }
+
+    public IntPtr SourceWindowHandle { get; }
+
+    public string? ErrorMessage { get; }
+
+    public static SelectionCaptureResult Ok(string selectedText, IntPtr sourceWindowHandle)
+        => new(true, selectedText, sourceWindowHandle, null);
+
+    public static SelectionCaptureResult Fail(string errorMessage)
+        => new(false, null, IntPtr.Zero, errorMessage);
 }

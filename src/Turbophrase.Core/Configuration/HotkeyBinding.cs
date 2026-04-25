@@ -1,7 +1,7 @@
 namespace Turbophrase.Core.Configuration;
 
 /// <summary>
-/// Binding between a keyboard shortcut and a preset.
+/// Binding between a keyboard shortcut and an action.
 /// </summary>
 public class HotkeyBinding
 {
@@ -11,7 +11,41 @@ public class HotkeyBinding
     public string Keys { get; set; } = string.Empty;
 
     /// <summary>
+    /// The action to execute when this hotkey is pressed.
+    /// If omitted, the binding is treated as a preset binding for backward compatibility.
+    /// </summary>
+    public string? Action { get; set; }
+
+    /// <summary>
     /// The preset name to execute when this hotkey is pressed.
+    /// Used when <see cref="Action"/> is omitted or set to <c>preset</c>.
     /// </summary>
     public string Preset { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Optional display name for non-preset actions.
+    /// </summary>
+    public string? Name { get; set; }
+
+    /// <summary>
+    /// Optional system prompt template for custom prompt actions.
+    /// Supports the placeholders {instruction} and {text}.
+    /// </summary>
+    public string? SystemPromptTemplate { get; set; }
+
+    /// <summary>
+    /// Optional provider override for custom prompt actions.
+    /// </summary>
+    public string? Provider { get; set; }
+
+    /// <summary>
+    /// Gets whether this binding executes a custom prompt action.
+    /// </summary>
+    public bool IsCustomPromptAction => string.Equals(Action, "custom-prompt", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets whether this binding executes a preset action.
+    /// </summary>
+    public bool IsPresetAction => string.IsNullOrWhiteSpace(Action)
+        || string.Equals(Action, "preset", StringComparison.OrdinalIgnoreCase);
 }

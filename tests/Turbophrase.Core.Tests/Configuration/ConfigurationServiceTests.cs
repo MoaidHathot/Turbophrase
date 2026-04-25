@@ -15,6 +15,7 @@ public class ConfigurationServiceTests
         Assert.Contains("\"providers\"", json);
         Assert.Contains("\"hotkeys\"", json);
         Assert.Contains("\"presets\"", json);
+        Assert.Contains("\"customPrompt\"", json);
         Assert.Contains("\"notifications\"", json);
     }
 
@@ -78,6 +79,65 @@ public class ConfigurationServiceTests
     }
 
     [Fact]
+    public void LoadConfiguration_BindsCustomPromptHotkeyAction()
+    {
+        var originalPath = ConfigurationService.CustomConfigFilePath;
+        string? tempDir = null;
+
+        try
+        {
+            tempDir = Path.Combine(Path.GetTempPath(), "turbophrase-config-" + Guid.NewGuid());
+            Directory.CreateDirectory(tempDir);
+
+            var configPath = Path.Combine(tempDir, "turbophrase.json");
+            File.WriteAllText(configPath, """
+                {
+                  "defaultProvider": "openai",
+                  "providers": {
+                    "openai": {
+                      "type": "openai",
+                      "apiKey": "test-key",
+                      "model": "gpt-4o"
+                    }
+                  },
+                  "hotkeys": [
+                    {
+                      "keys": "Ctrl+Shift+K",
+                      "action": "custom-prompt",
+                      "name": "Ask AI",
+                      "systemPromptTemplate": "Instruction: {instruction}\nText: {text}",
+                      "provider": "openai"
+                    }
+                  ]
+                }
+                """);
+
+            ConfigurationService.SetCustomConfigPath(configPath);
+
+            var config = ConfigurationService.LoadConfiguration();
+            var binding = Assert.Single(config.Hotkeys);
+
+            Assert.Equal("Ctrl+Shift+K", binding.Keys);
+            Assert.Equal("custom-prompt", binding.Action);
+            Assert.Equal("Ask AI", binding.Name);
+            Assert.Equal("Instruction: {instruction}\nText: {text}", binding.SystemPromptTemplate);
+            Assert.Equal("openai", binding.Provider);
+            Assert.True(binding.IsCustomPromptAction);
+        }
+        finally
+        {
+            var field = typeof(ConfigurationService).GetField("_customConfigFilePath",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            field?.SetValue(null, originalPath);
+
+            if (tempDir != null && Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void GetDefaultConfigJson_ContainsDefaultPresets()
     {
         var json = ConfigurationService.GetDefaultConfigJson();
@@ -100,6 +160,17 @@ public class ConfigurationServiceTests
         Assert.Contains("\"showOnProviderChange\": true", json);
         Assert.Contains("\"showProcessingOverlay\": true", json);
         Assert.Contains("\"showProcessingAnimation\": true", json);
+    }
+
+    [Fact]
+    public void GetDefaultConfigJson_ContainsCustomPromptTemplate()
+    {
+        var json = ConfigurationService.GetDefaultConfigJson();
+
+        Assert.Contains("\"customPrompt\"", json);
+        Assert.Contains("\"systemPromptTemplate\"", json);
+        Assert.Contains("{instruction}", json);
+        Assert.Contains("{text}", json);
     }
 
     [Fact]
@@ -144,7 +215,7 @@ public class ConfigurationServiceTests
         try
         {
             // Point to a non-existent file
-            var nonExistentPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString(), "config.json");
+            var nonExistentPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString(), "turbophrase.json");
             ConfigurationService.SetCustomConfigPath(nonExistentPath);
 
             var config = ConfigurationService.LoadConfiguration();
@@ -171,7 +242,7 @@ public class ConfigurationServiceTests
         var originalPath = ConfigurationService.CustomConfigFilePath;
         try
         {
-            var nonExistentPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString(), "config.json");
+            var nonExistentPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString(), "turbophrase.json");
             ConfigurationService.SetCustomConfigPath(nonExistentPath);
 
             var config = ConfigurationService.LoadConfiguration();
@@ -258,11 +329,11 @@ public class ConfigurationServiceTests
             tempDir = Path.Combine(Path.GetTempPath(), "xdg-test-" + Guid.NewGuid());
             var turbophraseDir = Path.Combine(tempDir, "Turbophrase");
             Directory.CreateDirectory(turbophraseDir);
-            File.WriteAllText(Path.Combine(turbophraseDir, "config.json"), "{}");
+            File.WriteAllText(Path.Combine(turbophraseDir, "turbophrase.json"), "{}");
 
             Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", tempDir);
 
-            var expectedPath = Path.Combine(turbophraseDir, "config.json");
+            var expectedPath = Path.Combine(turbophraseDir, "turbophrase.json");
             Assert.Equal(expectedPath, ConfigurationService.ConfigFilePath);
             Assert.Equal(turbophraseDir, ConfigurationService.ConfigDirectory);
         }
@@ -298,13 +369,17 @@ public class ConfigurationServiceTests
             Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", tempDir);
 
             // Should NOT use the XDG path since no config file exists there
-            var xdgPath = Path.Combine(turbophraseDir, "config.json");
+            var xdgPath = Path.Combine(turbophraseDir, "turbophrase.json");
             Assert.NotEqual(xdgPath, ConfigurationService.ConfigFilePath);
 
-            // Should fall back to the default %APPDATA% path
+            // Should fall back to the default %APPDATA% location.
+            // If a legacy config already exists there, the resolver intentionally keeps using it.
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var expectedDefault = Path.Combine(appData, "Turbophrase", "config.json");
-            Assert.Equal(expectedDefault, ConfigurationService.ConfigFilePath);
+            var defaultDirectory = Path.Combine(appData, "Turbophrase");
+            Assert.Equal(defaultDirectory, ConfigurationService.ConfigDirectory);
+            Assert.StartsWith(defaultDirectory, ConfigurationService.ConfigFilePath);
+            var resolvedFileName = Path.GetFileName(ConfigurationService.ConfigFilePath);
+            Assert.True(resolvedFileName == "turbophrase.json" || resolvedFileName == "config.json");
         }
         finally
         {
@@ -329,7 +404,7 @@ public class ConfigurationServiceTests
             tempDir = Path.Combine(Path.GetTempPath(), "xdg-test-" + Guid.NewGuid());
             var turbophraseDir = Path.Combine(tempDir, "Turbophrase");
             Directory.CreateDirectory(turbophraseDir);
-            File.WriteAllText(Path.Combine(turbophraseDir, "config.json"), "{}");
+            File.WriteAllText(Path.Combine(turbophraseDir, "turbophrase.json"), "{}");
 
             Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", tempDir);
 
@@ -338,7 +413,7 @@ public class ConfigurationServiceTests
             ConfigurationService.SetCustomConfigPath(customPath);
 
             Assert.Equal(customPath, ConfigurationService.ConfigFilePath);
-            var xdgPath = Path.Combine(turbophraseDir, "config.json");
+            var xdgPath = Path.Combine(turbophraseDir, "turbophrase.json");
             Assert.NotEqual(xdgPath, ConfigurationService.ConfigFilePath);
         }
         finally
@@ -369,7 +444,7 @@ public class ConfigurationServiceTests
             tempDir = Path.Combine(Path.GetTempPath(), "xdg-test-" + Guid.NewGuid());
             var turbophraseDir = Path.Combine(tempDir, "Turbophrase");
             Directory.CreateDirectory(turbophraseDir);
-            File.WriteAllText(Path.Combine(turbophraseDir, "config.json"), """
+            File.WriteAllText(Path.Combine(turbophraseDir, "turbophrase.json"), """
                 {
                   "defaultProvider": "anthropic"
                 }
@@ -380,6 +455,40 @@ public class ConfigurationServiceTests
             var config = ConfigurationService.LoadConfiguration();
 
             Assert.Equal("anthropic", config.DefaultProvider);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", originalValue);
+            var field = typeof(ConfigurationService).GetField("_customConfigFilePath",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            field?.SetValue(null, originalCustomPath);
+            if (tempDir != null && Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ConfigFilePath_UsesLegacyXdgConfig_WhenPreferredFileDoesNotExist()
+    {
+        var originalValue = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+        var originalCustomPath = ConfigurationService.CustomConfigFilePath;
+        string? tempDir = null;
+        try
+        {
+            var field = typeof(ConfigurationService).GetField("_customConfigFilePath",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            field?.SetValue(null, null);
+
+            tempDir = Path.Combine(Path.GetTempPath(), "xdg-test-" + Guid.NewGuid());
+            var turbophraseDir = Path.Combine(tempDir, "Turbophrase");
+            Directory.CreateDirectory(turbophraseDir);
+            File.WriteAllText(Path.Combine(turbophraseDir, "config.json"), "{}");
+
+            Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", tempDir);
+
+            var expectedPath = Path.Combine(turbophraseDir, "config.json");
+            Assert.Equal(expectedPath, ConfigurationService.ConfigFilePath);
+            Assert.Equal(turbophraseDir, ConfigurationService.ConfigDirectory);
         }
         finally
         {

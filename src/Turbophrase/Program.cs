@@ -7,6 +7,8 @@ using Turbophrase.Services;
 /// </summary>
 static class Program
 {
+    private const string SingleInstanceMutexName = @"Local\Turbophrase.SingleInstance";
+
     [STAThread]
     static int Main(string[] args)
     {
@@ -99,6 +101,13 @@ static class Program
             return HandleCliCommand(remainingArgs.ToArray());
         }
 
+        using var singleInstanceMutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out var createdNew);
+        if (!createdNew)
+        {
+            Console.Error.WriteLine("Turbophrase is already running.");
+            return 1;
+        }
+
         // Run as tray application
         ApplicationConfiguration.Initialize();
         Application.Run(new TrayApplicationContext());
@@ -181,7 +190,7 @@ static class Program
             foreach (var (name, provider) in config.Providers)
             {
                 var hasKey = !string.IsNullOrEmpty(provider.ApiKey) && !provider.ApiKey.StartsWith("${");
-                var status = hasKey || provider.Type == "copilot-cli" || provider.Type == "ollama"
+                var status = hasKey || provider.Type is "copilot" or "copilot-cli" or "github-copilot" or "ollama"
                     ? "[configured]"
                     : "[not configured]";
                 Console.WriteLine($"  {name} ({provider.Type}) {status}");
@@ -322,8 +331,10 @@ static class Program
             Configuration:
               Config file lookup order:
                 1. --config <path>       (explicit path)
-                2. XDG_CONFIG_HOME/Turbophrase/config.json (if env var set and file exists)
-                3. %APPDATA%\Turbophrase\config.json       (default)
+                2. XDG_CONFIG_HOME/Turbophrase/turbophrase.json (preferred if it exists)
+                3. XDG_CONFIG_HOME/Turbophrase/config.json      (legacy fallback)
+                4. %APPDATA%\Turbophrase\turbophrase.json      (preferred default)
+                5. %APPDATA%\Turbophrase\config.json           (legacy fallback)
               Supports environment variable substitution: ${OPENAI_API_KEY}
 
             Default hotkeys:
@@ -332,7 +343,7 @@ static class Program
               Ctrl+Shift+F  Make formal
               Ctrl+Shift+C  Make casual
 
-            Notification settings (in config.json):
+            Notification settings (in turbophrase.json):
               notifications.showOnStartup           Show notification on app startup
               notifications.showOnSuccess           Show notification on successful transform
               notifications.showOnError             Show notification on errors

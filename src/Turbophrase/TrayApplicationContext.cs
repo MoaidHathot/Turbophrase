@@ -1,4 +1,5 @@
 using System.Reflection;
+using Turbophrase.Core.Abstractions;
 using Turbophrase.Core.Configuration;
 using Turbophrase.Services;
 
@@ -15,7 +16,7 @@ public class TrayApplicationContext : ApplicationContext
     private TurbophraseConfig _config;
     private readonly GlobalHotkeyService _hotkeyService;
     private TextTransformOrchestrator _orchestrator;
-    private readonly HiddenMessageWindow _messageWindow;
+    private readonly HotkeyMessageFilter _messageFilter;
     private readonly ConfigurationWatcher _configWatcher;
     private readonly TrayIconAnimator _iconAnimator;
     private readonly ProcessingOverlay _processingOverlay;
@@ -24,15 +25,17 @@ public class TrayApplicationContext : ApplicationContext
     {
         try
         {
+            RuntimeLog.Write("app-start");
+
             // Load configuration
             _config = ConfigurationService.LoadConfiguration();
-
-            // Create hidden window for message handling
-            _messageWindow = new HiddenMessageWindow(this);
+            RuntimeLog.Write($"config-loaded path='{ConfigurationService.ConfigFilePath}' hotkeys={_config.Hotkeys.Count} defaultProvider='{_config.DefaultProvider}'");
 
             // Initialize services
-            _hotkeyService = new GlobalHotkeyService(_messageWindow.Handle);
+            _hotkeyService = new GlobalHotkeyService(IntPtr.Zero);
             _orchestrator = new TextTransformOrchestrator(_config);
+            _messageFilter = new HotkeyMessageFilter(this);
+            Application.AddMessageFilter(_messageFilter);
 
             // Create tray icon with context menu
             _trayIcon = new NotifyIcon
@@ -87,6 +90,7 @@ public class TrayApplicationContext : ApplicationContext
     private void RegisterHotkeys()
     {
         var registered = _hotkeyService.RegisterHotkeys(_config.Hotkeys);
+        RuntimeLog.Write($"hotkeys-register-summary registered={registered.Count} total={_config.Hotkeys.Count}");
 
         if (registered.Count == 0)
         {
@@ -191,58 +195,42 @@ public class TrayApplicationContext : ApplicationContext
             return;
 
         TextTransformOrchestrator.ShowNotification(title, message, isError);
+
+        // Toast notifications can fail silently on some systems, so show a tray balloon for errors too.
+        if (isError)
+        {
+            try
+            {
+                _trayIcon.BalloonTipTitle = title;
+                _trayIcon.BalloonTipText = message;
+                _trayIcon.BalloonTipIcon = ToolTipIcon.Error;
+                _trayIcon.ShowBalloonTip(4000);
+            }
+            catch
+            {
+                // Ignore balloon failures too.
+            }
+        }
     }
 
     private async void OnHotkeyPressed(object? sender, HotkeyPressedEventArgs e)
     {
         try
         {
-            // Show processing indicators (if enabled)
-            if (_config.Notifications.ShowProcessingAnimation)
-                _iconAnimator.StartAnimation();
-            if (_config.Notifications.ShowProcessingOverlay)
-                _processingOverlay.ShowOverlay();
-
-            var result = await _orchestrator.TransformSelectedTextAsync(e.Binding.Preset);
-
-            // Hide processing indicators
-            _iconAnimator.StopAnimation();
-            _processingOverlay.HideOverlay();
-
-            if (!result.Success)
-            {
-                if (_config.Notifications.ShowOnError)
-                {
-                    TextTransformOrchestrator.ShowNotification(
-                        "Turbophrase Error",
-                        result.ErrorMessage ?? "An unknown error occurred.",
-                        isError: true);
-                }
-            }
-            else
-            {
-                if (_config.Notifications.ShowOnSuccess)
-                {
-                    // Get the preset display name
-                    var presetDisplayName = _config.Presets.TryGetValue(e.Binding.Preset, out var preset)
-                        ? preset.Name ?? e.Binding.Preset
-                        : e.Binding.Preset;
-                    var message = result.ProviderName != null
-                        ? $"{presetDisplayName} completed using {result.ProviderName}"
-                        : $"{presetDisplayName} completed";
-                    TextTransformOrchestrator.ShowNotification("Turbophrase", message, isError: false);
-                }
-            }
+            RuntimeLog.Write($"hotkey-handler-start keys='{e.Binding.Keys}' action='{e.Binding.Action ?? "preset"}' preset='{e.Binding.Preset}'");
+            await ExecuteBindingAsync(e.Binding);
+            RuntimeLog.Write($"hotkey-handler-end keys='{e.Binding.Keys}'");
         }
         catch (Exception ex)
         {
+            RuntimeLog.Write($"hotkey-handler-exception error='{ex.Message}'");
             // Ensure indicators are hidden even on exception
             _iconAnimator.StopAnimation();
             _processingOverlay.HideOverlay();
 
             if (_config.Notifications.ShowOnError)
             {
-                TextTransformOrchestrator.ShowNotification(
+                ShowNotification(
                     "Turbophrase Error",
                     ex.Message,
                     isError: true);
@@ -256,6 +244,14 @@ public class TrayApplicationContext : ApplicationContext
 
         // Presets submenu
         var presetsMenu = new ToolStripMenuItem("Transform");
+        var customPromptItem = new ToolStripMenuItem("Custom Prompt...");
+        customPromptItem.Click += async (_, _) =>
+        {
+            await ExecuteCustomPromptAsync();
+        };
+        presetsMenu.DropDownItems.Add(customPromptItem);
+        presetsMenu.DropDownItems.Add(new ToolStripSeparator());
+
         foreach (var (key, preset) in _config.Presets)
         {
             var presetName = key;
@@ -263,39 +259,7 @@ public class TrayApplicationContext : ApplicationContext
             var item = new ToolStripMenuItem(presetDisplayName);
             item.Click += async (_, _) =>
             {
-                if (_config.Notifications.ShowProcessingAnimation)
-                    _iconAnimator.StartAnimation();
-                if (_config.Notifications.ShowProcessingOverlay)
-                    _processingOverlay.ShowOverlay();
-                try
-                {
-                    var result = await _orchestrator.TransformSelectedTextAsync(presetName);
-                    if (!result.Success)
-                    {
-                        if (_config.Notifications.ShowOnError)
-                        {
-                            TextTransformOrchestrator.ShowNotification(
-                                "Turbophrase Error",
-                                result.ErrorMessage ?? "An unknown error occurred.",
-                                isError: true);
-                        }
-                    }
-                    else
-                    {
-                        if (_config.Notifications.ShowOnSuccess)
-                        {
-                            var message = result.ProviderName != null
-                                ? $"{presetDisplayName} completed using {result.ProviderName}"
-                                : $"{presetDisplayName} completed";
-                            TextTransformOrchestrator.ShowNotification("Turbophrase", message, isError: false);
-                        }
-                    }
-                }
-                finally
-                {
-                    _iconAnimator.StopAnimation();
-                    _processingOverlay.HideOverlay();
-                }
+                await ExecutePresetAsync(presetName, presetDisplayName);
             };
             presetsMenu.DropDownItems.Add(item);
         }
@@ -307,10 +271,7 @@ public class TrayApplicationContext : ApplicationContext
         var hotkeysMenu = new ToolStripMenuItem("Hotkeys");
         foreach (var hotkey in _config.Hotkeys)
         {
-            var presetName = _config.Presets.TryGetValue(hotkey.Preset, out var p)
-                ? p.Name ?? hotkey.Preset
-                : hotkey.Preset;
-            hotkeysMenu.DropDownItems.Add(new ToolStripMenuItem($"{hotkey.Keys} - {presetName}")
+            hotkeysMenu.DropDownItems.Add(new ToolStripMenuItem($"{hotkey.Keys} - {GetBindingDisplayName(hotkey)}")
             {
                 Enabled = false
             });
@@ -419,6 +380,133 @@ public class TrayApplicationContext : ApplicationContext
         return menu;
     }
 
+    private async Task ExecuteBindingAsync(HotkeyBinding binding)
+    {
+        if (binding.IsCustomPromptAction)
+        {
+            await ExecuteCustomPromptAsync(binding);
+            return;
+        }
+
+        if (binding.IsPresetAction)
+        {
+            await ExecutePresetAsync(binding.Preset, GetBindingDisplayName(binding));
+            return;
+        }
+
+        ShowNotification("Turbophrase", $"Unsupported action '{binding.Action}'.", isError: true);
+    }
+
+    private async Task ExecutePresetAsync(string presetName, string displayName)
+    {
+        await ExecuteTransformWithIndicatorsAsync(
+            async () => await _orchestrator.TransformSelectedTextAsync(presetName),
+            displayName);
+    }
+
+    private async Task ExecuteCustomPromptAsync(HotkeyBinding? binding = null)
+    {
+        var captureResult = await _orchestrator.CaptureSelectedTextAsync();
+        if (!captureResult.Success)
+        {
+            ShowTransformResult(TransformResult.Fail(captureResult.ErrorMessage ?? "No text is selected."), GetBindingDisplayName(binding));
+            return;
+        }
+
+        using var dialog = new CustomPromptDialog(_orchestrator.AvailableProviders, _config.DefaultProvider);
+        if (dialog.ShowDialog() != DialogResult.OK)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(dialog.PromptText))
+        {
+            ShowTransformResult(TransformResult.Fail("Prompt cannot be empty."), GetBindingDisplayName(binding));
+            return;
+        }
+
+        await ExecuteTransformWithIndicatorsAsync(
+            async () => await _orchestrator.TransformCapturedTextAsync(
+                captureResult,
+                BuildCustomPromptSystemPrompt(binding, dialog.PromptText, captureResult.SelectedText ?? string.Empty),
+                binding?.Provider ?? dialog.SelectedProvider),
+            GetBindingDisplayName(binding));
+    }
+
+    private async Task ExecuteTransformWithIndicatorsAsync(Func<Task<TransformResult>> operation, string displayName)
+    {
+        RuntimeLog.Write($"transform-indicators-start display='{displayName}' overlay={_config.Notifications.ShowProcessingOverlay} animation={_config.Notifications.ShowProcessingAnimation}");
+        if (_config.Notifications.ShowProcessingAnimation)
+            _iconAnimator.StartAnimation();
+        if (_config.Notifications.ShowProcessingOverlay)
+            _processingOverlay.ShowOverlay();
+
+        try
+        {
+            var result = await operation();
+            RuntimeLog.Write($"transform-operation-complete success={result.Success} provider='{result.ProviderName}' error='{result.ErrorMessage}'");
+            ShowTransformResult(result, displayName);
+        }
+        finally
+        {
+            _iconAnimator.StopAnimation();
+            _processingOverlay.HideOverlay();
+            RuntimeLog.Write("transform-indicators-stop");
+        }
+    }
+
+    private void ShowTransformResult(TransformResult result, string displayName)
+    {
+        if (!result.Success)
+        {
+            if (_config.Notifications.ShowOnError)
+            {
+                ShowNotification(
+                    "Turbophrase Error",
+                    result.ErrorMessage ?? "An unknown error occurred.",
+                    isError: true);
+            }
+
+            return;
+        }
+
+        if (_config.Notifications.ShowOnSuccess)
+        {
+            var message = result.ProviderName != null
+                ? $"{displayName} completed using {result.ProviderName}"
+                : $"{displayName} completed";
+            TextTransformOrchestrator.ShowNotification("Turbophrase", message, isError: false);
+        }
+    }
+
+    private string GetBindingDisplayName(HotkeyBinding? binding)
+    {
+        if (binding == null)
+        {
+            return "Custom Prompt";
+        }
+
+        if (binding.IsCustomPromptAction)
+        {
+            return !string.IsNullOrWhiteSpace(binding.Name) ? binding.Name : "Custom Prompt";
+        }
+
+        if (_config.Presets.TryGetValue(binding.Preset, out var preset))
+        {
+            return preset.Name ?? binding.Preset;
+        }
+
+        return binding.Preset;
+    }
+
+    private string BuildCustomPromptSystemPrompt(HotkeyBinding? binding, string instruction, string selectedText)
+    {
+        var template = binding?.SystemPromptTemplate ?? _config.CustomPrompt.SystemPromptTemplate;
+        return template
+            .Replace("{instruction}", instruction, StringComparison.Ordinal)
+            .Replace("{text}", selectedText, StringComparison.Ordinal);
+    }
+
     private static Icon CreateTrayIcon()
     {
         // Create a simple tray icon programmatically
@@ -504,9 +592,9 @@ public class TrayApplicationContext : ApplicationContext
             _iconAnimator.Dispose();
             _configWatcher.Dispose();
             _hotkeyService.Dispose();
+            Application.RemoveMessageFilter(_messageFilter);
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
-            _messageWindow.Dispose();
         }
 
         base.Dispose(disposing);
@@ -520,37 +608,27 @@ public class TrayApplicationContext : ApplicationContext
 }
 
 /// <summary>
-/// Hidden window for receiving WM_HOTKEY messages.
+/// Message filter for receiving WM_HOTKEY messages from the UI thread queue.
 /// </summary>
-internal class HiddenMessageWindow : NativeWindow, IDisposable
+internal sealed class HotkeyMessageFilter : IMessageFilter
 {
     private const int WM_HOTKEY = 0x0312;
     private readonly TrayApplicationContext _context;
 
-    public HiddenMessageWindow(TrayApplicationContext context)
+    public HotkeyMessageFilter(TrayApplicationContext context)
     {
         _context = context;
-        CreateHandle(new CreateParams
-        {
-            Caption = "TurbophraseMessageWindow",
-            Style = 0
-        });
     }
 
-    protected override void WndProc(ref Message m)
+    public bool PreFilterMessage(ref Message m)
     {
         if (m.Msg == WM_HOTKEY)
         {
             var hotkeyId = m.WParam.ToInt32();
             _context.HandleHotkeyMessage(hotkeyId);
+            return true;
         }
 
-        base.WndProc(ref m);
-    }
-
-    public void Dispose()
-    {
-        DestroyHandle();
-        GC.SuppressFinalize(this);
+        return false;
     }
 }

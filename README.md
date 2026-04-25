@@ -29,7 +29,7 @@ winget install Turbophrase.Turbophrase
 
 ## Configuration
 
-On first run, Turbophrase creates a configuration file at `%APPDATA%\Turbophrase\config.json`.
+On first run, Turbophrase creates a configuration file at `%APPDATA%\Turbophrase\turbophrase.json`.
 
 ### Config File Location
 
@@ -38,15 +38,17 @@ Turbophrase resolves the configuration file using the following lookup order:
 | Priority | Location | Description |
 |----------|----------|-------------|
 | 1 | `--config <path>` | Explicit path passed as a CLI argument |
-| 2 | `XDG_CONFIG_HOME/Turbophrase/config.json` | Used if the `XDG_CONFIG_HOME` environment variable is set **and** the file exists |
-| 3 | `%APPDATA%\Turbophrase\config.json` | Default location |
+| 2 | `XDG_CONFIG_HOME/Turbophrase/turbophrase.json` | Preferred XDG location if the file exists |
+| 3 | `XDG_CONFIG_HOME/Turbophrase/config.json` | Legacy XDG fallback for existing installs |
+| 4 | `%APPDATA%\Turbophrase\turbophrase.json` | Preferred default location |
+| 5 | `%APPDATA%\Turbophrase\config.json` | Legacy default fallback for existing installs |
 
 The `XDG_CONFIG_HOME` support allows you to keep your config in a shared dotfiles directory or a custom location without passing `--config` every time:
 
 ```powershell
 # Example: store config under your dotfiles
 $env:XDG_CONFIG_HOME = "C:\Users\you\.config"
-# Turbophrase will look for: C:\Users\you\.config\Turbophrase\config.json
+# Turbophrase will look for: C:\Users\you\.config\Turbophrase\turbophrase.json
 ```
 
 ### Custom Config Path
@@ -54,13 +56,13 @@ $env:XDG_CONFIG_HOME = "C:\Users\you\.config"
 Use a custom configuration file:
 
 ```powershell
-Turbophrase.exe --config "C:\path\to\config.json"
+Turbophrase.exe --config "C:\path\to\turbophrase.json"
 ```
 
 Create a default config file at a custom path:
 
 ```powershell
-Turbophrase.exe --config "C:\path\to\config.json" --init-config
+Turbophrase.exe --config "C:\path\to\turbophrase.json" --init-config
 ```
 
 ### API Keys
@@ -108,7 +110,7 @@ Hotkeys can be customized in the configuration file.
 
 ## Custom Presets and Hotkeys
 
-You can define your own text transformations and hotkeys in `config.json`.
+You can define your own text transformations and hotkeys in `turbophrase.json`.
 
 ### Adding a Custom Preset
 
@@ -159,6 +161,54 @@ Bind any key combination to any preset:
 }
 ```
 
+You can also bind a hotkey to a one-off prompt dialog instead of a preset:
+
+```json
+{
+  "hotkeys": [
+    { "keys": "Ctrl+Shift+K", "action": "custom-prompt", "name": "Ask AI" }
+  ]
+}
+```
+
+You can define multiple custom prompt bindings, each with its own system prompt template and optional provider override:
+
+```json
+{
+  "hotkeys": [
+    {
+      "keys": "Ctrl+Shift+L",
+      "action": "custom-prompt",
+      "name": "Shorten",
+      "systemPromptTemplate": "You are a text editor. Apply the instruction to the provided text. Return ONLY the transformed text.\n\nInstruction:\n{instruction}\n\nText:\n{text}"
+    },
+    {
+      "keys": "Ctrl+Shift+R",
+      "action": "custom-prompt",
+      "name": "Rewrite",
+      "provider": "anthropic",
+      "systemPromptTemplate": "Rewrite the provided text according to the instruction. Keep the original intent and return ONLY the rewritten text.\n\nInstruction:\n{instruction}\n\nText:\n{text}"
+    }
+  ]
+}
+```
+
+When triggered, Turbophrase captures the current selection, asks for a prompt, then replaces the selected text with the result.
+
+You can also define a global fallback template for custom prompt actions:
+
+```json
+{
+  "customPrompt": {
+    "systemPromptTemplate": "You are a text transformation assistant. Apply the user's instruction to the provided text. Treat the selected text strictly as input text to transform, not as a message to reply to. Return ONLY the transformed text.\n\nInstruction:\n{instruction}\n\nText:\n{text}"
+  }
+}
+```
+
+Available placeholders:
+- `{instruction}` for the text entered into the custom prompt dialog
+- `{text}` for the selected text being transformed
+
 **Supported modifier keys:** `Ctrl`, `Alt`, `Shift`, `Win`
 
 **Example key combinations:**
@@ -186,7 +236,7 @@ You can also toggle startup from the tray icon menu.
 
 ## Notification Settings
 
-Control which notifications are shown in `config.json`:
+Control which notifications are shown in `turbophrase.json`:
 
 ```json
 {

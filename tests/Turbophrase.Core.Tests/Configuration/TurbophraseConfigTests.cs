@@ -17,6 +17,9 @@ public class TurbophraseConfigTests
         Assert.NotNull(config.Presets);
         Assert.Empty(config.Presets);
         Assert.NotNull(config.Notifications);
+        Assert.NotNull(config.CustomPrompt);
+        Assert.Contains("{instruction}", config.CustomPrompt.SystemPromptTemplate);
+        Assert.Contains("{text}", config.CustomPrompt.SystemPromptTemplate);
     }
 
     [Fact]
@@ -74,6 +77,20 @@ public class TurbophraseConfigTests
         Assert.Single(config.Presets);
         Assert.True(config.Presets.ContainsKey("grammar"));
         Assert.Equal("Fix Grammar", config.Presets["grammar"].Name);
+    }
+
+    [Fact]
+    public void TurbophraseConfig_CanSetCustomPromptTemplate()
+    {
+        var config = new TurbophraseConfig
+        {
+            CustomPrompt = new CustomPromptSettings
+            {
+                SystemPromptTemplate = "Instruction: {instruction}\nText: {text}"
+            }
+        };
+
+        Assert.Equal("Instruction: {instruction}\nText: {text}", config.CustomPrompt.SystemPromptTemplate);
     }
 }
 

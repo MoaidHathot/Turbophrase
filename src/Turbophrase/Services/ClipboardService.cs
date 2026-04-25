@@ -8,6 +8,13 @@ namespace Turbophrase.Services;
 /// </summary>
 public class ClipboardService
 {
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
     // Windows API imports for simulating keyboard input
     [DllImport("user32.dll")]
     private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
@@ -19,8 +26,25 @@ public class ClipboardService
     private const byte VK_SHIFT = 0x10;
     private const byte VK_MENU = 0x12; // Alt key
     private const byte VK_C = 0x43;
+    private const byte VK_INSERT = 0x2D;
     private const byte VK_V = 0x56;
     private const uint KEYEVENTF_KEYUP = 0x02;
+
+    /// <summary>
+    /// Gets the current foreground window handle.
+    /// </summary>
+    public IntPtr GetActiveWindowHandle() => GetForegroundWindow();
+
+    /// <summary>
+    /// Attempts to restore focus to a window before pasting transformed text back.
+    /// </summary>
+    public void RestoreWindowFocus(IntPtr windowHandle)
+    {
+        if (windowHandle != IntPtr.Zero)
+        {
+            SetForegroundWindow(windowHandle);
+        }
+    }
 
     /// <summary>
     /// Gets the currently selected text by simulating Ctrl+C and reading from clipboard.
@@ -31,36 +55,40 @@ public class ClipboardService
         // Store original clipboard content
         var originalContent = await GetClipboardTextAsync();
 
-        // Clear clipboard to detect if copy was successful
-        await SetClipboardTextAsync(string.Empty);
-
         // Release any held modifier keys first (from the hotkey)
         ReleaseModifierKeys();
 
         // Small delay to ensure modifiers are released
         await Task.Delay(50);
 
-        // Simulate Ctrl+C
-        SimulateCopy();
-
-        // Wait for copy operation to complete
-        await Task.Delay(150);
-
-        // Get the new clipboard content
-        var selectedText = await GetClipboardTextAsync();
-
-        // If clipboard is still empty, no text was selected
-        if (string.IsNullOrEmpty(selectedText))
+        foreach (var copyAttempt in GetCopyAttempts())
         {
-            // Restore original clipboard content
-            if (!string.IsNullOrEmpty(originalContent))
+            // Clear clipboard to detect if copy was successful
+            await SetClipboardTextAsync(string.Empty);
+            RuntimeLog.Write($"selection-copy-attempt method='{copyAttempt.Name}'");
+
+            copyAttempt.Action();
+
+            // Wait for copy operation to complete
+            await Task.Delay(150);
+
+            var selectedText = await GetClipboardTextAsync();
+            if (!string.IsNullOrEmpty(selectedText))
             {
-                await SetClipboardTextAsync(originalContent);
+                RuntimeLog.Write($"selection-copy-success method='{copyAttempt.Name}' length={selectedText.Length}");
+                return selectedText;
             }
-            return null;
         }
 
-        return selectedText;
+        RuntimeLog.Write("selection-copy-failed no-text-copied");
+
+        // Restore original clipboard content
+        if (!string.IsNullOrEmpty(originalContent))
+        {
+            await SetClipboardTextAsync(originalContent);
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -198,16 +226,26 @@ public class ClipboardService
     /// </summary>
     private static void SimulateCopy()
     {
-        // Press Ctrl
+        SendModifiedKey(VK_CONTROL, VK_C);
+    }
+
+    private static void SimulateCopyWithCtrlInsert()
+    {
+        SendModifiedKey(VK_CONTROL, VK_INSERT);
+    }
+
+    private static void SimulateCopyWithCtrlShiftC()
+    {
         keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);
         Thread.Sleep(10);
-        // Press C
+        keybd_event(VK_SHIFT, 0, 0, UIntPtr.Zero);
+        Thread.Sleep(10);
         keybd_event(VK_C, 0, 0, UIntPtr.Zero);
         Thread.Sleep(10);
-        // Release C
         keybd_event(VK_C, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
         Thread.Sleep(10);
-        // Release Ctrl
+        keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+        Thread.Sleep(10);
         keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
     }
 
@@ -216,16 +254,24 @@ public class ClipboardService
     /// </summary>
     private static void SimulatePaste()
     {
-        // Press Ctrl
-        keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);
+        SendModifiedKey(VK_CONTROL, VK_V);
+    }
+
+    private static void SendModifiedKey(byte modifier, byte key)
+    {
+        keybd_event(modifier, 0, 0, UIntPtr.Zero);
         Thread.Sleep(10);
-        // Press V
-        keybd_event(VK_V, 0, 0, UIntPtr.Zero);
+        keybd_event(key, 0, 0, UIntPtr.Zero);
         Thread.Sleep(10);
-        // Release V
-        keybd_event(VK_V, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+        keybd_event(key, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
         Thread.Sleep(10);
-        // Release Ctrl
-        keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+        keybd_event(modifier, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+    }
+
+    private static IEnumerable<(string Name, Action Action)> GetCopyAttempts()
+    {
+        yield return ("ctrl+c", SimulateCopy);
+        yield return ("ctrl+insert", SimulateCopyWithCtrlInsert);
+        yield return ("ctrl+shift+c", SimulateCopyWithCtrlShiftC);
     }
 }
