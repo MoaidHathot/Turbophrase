@@ -1,26 +1,25 @@
 <#
 .SYNOPSIS
-    Tags and releases a new version of Turbophrase.
+    Creates and pushes a release tag for Turbophrase.
 .DESCRIPTION
-    This script bumps the version across the project, commits the changes,
-    creates a git tag, and pushes everything to trigger the GitHub Actions
-    release workflow. Assumes all other changes are already committed.
+    Normalizes the supplied version to a v-prefixed git tag, creates the tag,
+    and pushes it to origin to trigger the GitHub Actions release workflow.
 .PARAMETER Version
-    The version number to release (e.g. 1.0.3). Must follow semantic versioning.
+    The version to release. Accepts 1.0.3 or v1.0.3.
 .PARAMETER Force
-    Skip the confirmation prompt before pushing.
+    Skip the confirmation prompt before creating and pushing the tag.
 .PARAMETER DryRun
     Show what would be done without making any changes.
 .EXAMPLE
     ./release.ps1 -Version 1.0.3
 .EXAMPLE
-    ./release.ps1 -Version 2.0.0 -Force
+    ./release.ps1 -Version v1.0.3 -Force
 .EXAMPLE
     ./release.ps1 -Version 1.0.3 -DryRun
 #>
 param(
-    [Parameter(Mandatory = $true)]
-    [ValidatePattern('^\d+\.\d+\.\d+(-[\w.]+)?$')]
+    [Parameter(Mandatory = $true, Position = 0)]
+    [ValidatePattern('^v?\d+\.\d+\.\d+(-[\w.]+)?$')]
     [string]$Version,
 
     [switch]$Force,
@@ -29,9 +28,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$tag = "v$Version"
-
-# --- Helpers ---
+$normalizedVersion = $Version.Trim()
+$tag = if ($normalizedVersion.StartsWith("v")) { $normalizedVersion } else { "v$normalizedVersion" }
 
 function Write-Step {
     param([string]$Message)
@@ -55,170 +53,91 @@ function Write-Err {
 
 function Invoke-Git {
     param([string[]]$Arguments)
+
     $output = & git @Arguments 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Err "git $($Arguments -join ' ') failed:"
-        Write-Host $output -ForegroundColor Red
+        if ($output) {
+            Write-Host ($output | Out-String).TrimEnd() -ForegroundColor Red
+        }
         exit 1
     }
+
     return $output
 }
 
-# --- Preflight checks ---
-
 Write-Host ""
-Write-Host "Turbophrase Release Script" -ForegroundColor Magenta
-Write-Host "==========================" -ForegroundColor Magenta
-Write-Host "  Version : $Version" -ForegroundColor White
+Write-Host "Turbophrase Release Tag Script" -ForegroundColor Magenta
+Write-Host "=============================" -ForegroundColor Magenta
+Write-Host "  Version : $normalizedVersion" -ForegroundColor White
 Write-Host "  Tag     : $tag" -ForegroundColor White
 if ($DryRun) {
     Write-Host "  Mode    : DRY RUN (no changes will be made)" -ForegroundColor Yellow
 }
 Write-Host ""
 
-# Check we're in a git repo
-if (-not (Test-Path .git)) {
-    Write-Err "Not in the root of a git repository."
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    Write-Err "git is not installed or not available on PATH."
     exit 1
 }
 
-# Check for clean working tree (all changes should already be committed)
-Write-Step "Checking working tree..."
-$status = Invoke-Git "status", "--porcelain"
-# Filter out lines that would be caused by version bump files we're about to modify
-$dirtyFiles = $status | Where-Object { $_ -match '\S' }
-# We allow the working tree to be clean, or we'll commit the version bump ourselves
-
-# Check the tag doesn't already exist
-Write-Step "Checking tag $tag..."
-$existingTags = Invoke-Git "tag", "--list", $tag
-if ($existingTags) {
-    Write-Err "Tag $tag already exists. Aborting."
+Write-Step "Checking git repository..."
+$insideWorkTree = (Invoke-Git "rev-parse", "--is-inside-work-tree" | Out-String).Trim()
+if ($insideWorkTree -ne "true") {
+    Write-Err "This script must be run inside a git repository."
     exit 1
 }
-Write-Ok "Tag $tag is available."
+Write-Ok "Inside a git repository."
 
-# Check we're on main branch
-Write-Step "Checking current branch..."
-$branch = (Invoke-Git "rev-parse", "--abbrev-ref", "HEAD") | Out-String
-$branch = $branch.Trim()
-if ($branch -ne "main" -and $branch -ne "master") {
-    Write-Err "Current branch is '$branch'. Releases should be created from 'main' or 'master'."
-    exit 1
-}
-Write-Ok "On branch '$branch'."
-
-# Check remote is reachable
 Write-Step "Checking remote..."
-$remoteUrl = (Invoke-Git "remote", "get-url", "origin") | Out-String
-$remoteUrl = $remoteUrl.Trim()
+$remoteUrl = (Invoke-Git "remote", "get-url", "origin" | Out-String).Trim()
 Write-Ok "Remote: $remoteUrl"
 
-# --- Version files ---
+Write-Step "Checking local tag $tag..."
+$localTag = (Invoke-Git "tag", "--list", $tag | Out-String).Trim()
+if ($localTag) {
+    Write-Err "Tag $tag already exists locally."
+    exit 1
+}
+Write-Ok "Tag $tag does not exist locally."
 
-$csprojPath = "src/Turbophrase/Turbophrase.csproj"
-$programPath = "src/Turbophrase/Program.cs"
+Write-Step "Checking remote tag $tag..."
+$remoteTag = (Invoke-Git "ls-remote", "--tags", "origin", "refs/tags/$tag" | Out-String).Trim()
+if ($remoteTag) {
+    Write-Err "Tag $tag already exists on origin."
+    exit 1
+}
+Write-Ok "Tag $tag does not exist on origin."
 
 Write-Host ""
-Write-Host "Updating version references..." -ForegroundColor Magenta
-Write-Host ""
 
-# Update .csproj <Version>
-Write-Step "Updating $csprojPath..."
-$csprojContent = Get-Content $csprojPath -Raw
-$updatedCsproj = $csprojContent -replace '<Version>[^<]+</Version>', "<Version>$Version</Version>"
-if ($updatedCsproj -eq $csprojContent) {
-    Write-Ok "Already at version $Version."
-} else {
-    if (-not $DryRun) {
-        $updatedCsproj | Set-Content $csprojPath -NoNewline
+if (-not $Force) {
+    Write-Host "This will create and push tag $tag to origin." -ForegroundColor Yellow
+    Write-Host "That push will trigger the GitHub Actions release workflow." -ForegroundColor Yellow
+    Write-Host ""
+
+    $confirm = Read-Host "Continue? [y/N]"
+    if ($confirm -notin @("y", "Y")) {
+        Write-Skip "Cancelled before creating the tag."
+        exit 0
     }
-    Write-Ok "Updated to $Version."
 }
 
-# Update hardcoded version in Program.cs
-Write-Step "Updating $programPath..."
-$programContent = Get-Content $programPath -Raw
-$updatedProgram = $programContent -replace 'Turbophrase v[\d]+\.[\d]+\.[\d]+[^"]*', "Turbophrase v$Version"
-if ($updatedProgram -eq $programContent) {
-    Write-Ok "Already at v$Version."
-} else {
-    if (-not $DryRun) {
-        $updatedProgram | Set-Content $programPath -NoNewline
-    }
-    Write-Ok "Updated to v$Version."
+if ($DryRun) {
+    Write-Skip "DRY RUN: Would run 'git tag $tag'"
+    Write-Skip "DRY RUN: Would run 'git push origin $tag'"
+    exit 0
 }
-
-# --- Commit version bump if files changed ---
-
-Write-Host ""
-Write-Host "Committing and tagging..." -ForegroundColor Magenta
-Write-Host ""
-
-$versionStatus = & git status --porcelain $csprojPath $programPath 2>&1
-$hasVersionChanges = $versionStatus | Where-Object { $_ -match '\S' }
-
-if ($hasVersionChanges) {
-    Write-Step "Staging version bump..."
-    if (-not $DryRun) {
-        Invoke-Git "add", $csprojPath, $programPath
-        Invoke-Git "commit", "-m", "Bump version to $Version"
-    }
-    Write-Ok "Committed version bump."
-} else {
-    Write-Skip "No version changes to commit (already at $Version)."
-}
-
-# --- Create tag ---
 
 Write-Step "Creating tag $tag..."
-if (-not $DryRun) {
-    Invoke-Git "tag", $tag
-}
-Write-Ok "Tag $tag created."
+Invoke-Git "tag", $tag | Out-Null
+Write-Ok "Created tag $tag."
 
-# --- Push ---
-
-Write-Host ""
-
-if (-not $DryRun) {
-    if (-not $Force) {
-        Write-Host "Ready to push commit and tag $tag to origin." -ForegroundColor Yellow
-        Write-Host "This will trigger the GitHub Actions release workflow." -ForegroundColor Yellow
-        Write-Host ""
-        $confirm = Read-Host "Push to origin? [y/N]"
-        if ($confirm -ne "y" -and $confirm -ne "Y") {
-            Write-Skip "Push cancelled. Tag $tag has been created locally."
-            Write-Host "  To push manually:" -ForegroundColor Gray
-            Write-Host "    git push origin $branch" -ForegroundColor Gray
-            Write-Host "    git push origin $tag" -ForegroundColor Gray
-            Write-Host "  To undo:" -ForegroundColor Gray
-            Write-Host "    git tag -d $tag" -ForegroundColor Gray
-            if ($hasVersionChanges) {
-                Write-Host "    git reset --soft HEAD~1" -ForegroundColor Gray
-            }
-            exit 0
-        }
-    }
-
-    Write-Step "Pushing to origin..."
-    Invoke-Git "push", "origin", $branch
-    Invoke-Git "push", "origin", $tag
-    Write-Ok "Pushed successfully."
-} else {
-    Write-Skip "DRY RUN: Would push $branch and $tag to origin."
-}
-
-# --- Done ---
+Write-Step "Pushing tag $tag to origin..."
+Invoke-Git "push", "origin", $tag | Out-Null
+Write-Ok "Pushed tag $tag to origin."
 
 Write-Host ""
-Write-Host "Release $tag initiated!" -ForegroundColor Green
-Write-Host ""
-Write-Host "  GitHub Actions will now:" -ForegroundColor White
-Write-Host "    1. Build for win-x64 and win-arm64" -ForegroundColor Gray
-Write-Host "    2. Run tests" -ForegroundColor Gray
-Write-Host "    3. Create portable ZIPs and installers" -ForegroundColor Gray
-Write-Host "    4. Publish GitHub Release with artifacts" -ForegroundColor Gray
-Write-Host ""
-Write-Host "  Monitor: https://github.com/MoaidHathot/Turbophrase/actions" -ForegroundColor Cyan
+Write-Host "Release $tag initiated." -ForegroundColor Green
+Write-Host "Monitor: https://github.com/MoaidHathot/Turbophrase/actions" -ForegroundColor Cyan
 Write-Host ""
