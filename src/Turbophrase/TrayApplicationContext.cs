@@ -25,11 +25,11 @@ public class TrayApplicationContext : ApplicationContext
     {
         try
         {
-            RuntimeLog.Write("app-start");
-
             // Load configuration
             _config = ConfigurationService.LoadConfiguration();
-            RuntimeLog.Write($"config-loaded path='{ConfigurationService.ConfigFilePath}' hotkeys={_config.Hotkeys.Count} defaultProvider='{_config.DefaultProvider}'");
+            RuntimeLog.Configure(_config.Logging);
+            RuntimeLog.Write("app-start");
+            RuntimeLog.Write($"config-loaded path='{ConfigurationService.ConfigFilePath}' hotkeys={_config.Hotkeys.Count} defaultProvider='{_config.DefaultProvider}' logging={_config.Logging.Enabled}");
 
             // Initialize services
             _hotkeyService = new GlobalHotkeyService(IntPtr.Zero);
@@ -128,6 +128,7 @@ public class TrayApplicationContext : ApplicationContext
         {
             // Reload configuration
             var newConfig = ConfigurationService.LoadConfiguration();
+            RuntimeLog.Configure(newConfig.Logging);
 
             // Unregister old hotkeys
             _hotkeyService.UnregisterAll();

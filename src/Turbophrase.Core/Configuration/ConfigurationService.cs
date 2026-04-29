@@ -281,6 +281,9 @@ public partial class ConfigurationService
                 "showOnProviderChange": true,
                 "showProcessingOverlay": true,
                 "showProcessingAnimation": true
+              },
+              "logging": {
+                "enabled": false
               }
             }
             """;

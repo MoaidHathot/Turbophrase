@@ -39,6 +39,23 @@ public class TurbophraseConfig
     /// Settings for the custom prompt action.
     /// </summary>
     public CustomPromptSettings CustomPrompt { get; set; } = new();
+
+    /// <summary>
+    /// Logging settings controlling diagnostic file logging.
+    /// </summary>
+    public LoggingSettings Logging { get; set; } = new();
+}
+
+/// <summary>
+/// Settings for diagnostic file logging (turbophrase.log).
+/// </summary>
+public class LoggingSettings
+{
+    /// <summary>
+    /// Whether to write diagnostic events to turbophrase.log.
+    /// Disabled by default.
+    /// </summary>
+    public bool Enabled { get; set; } = false;
 }
 
 /// <summary>

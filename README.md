@@ -288,6 +288,20 @@ Control which notifications are shown in `turbophrase.json`:
 }
 ```
 
+## Diagnostic Logging
+
+Turbophrase can write diagnostic events (hotkey registration, transformations, errors, etc.) to `turbophrase.log` in the configuration directory. Logging is **disabled by default**. Enable it in `turbophrase.json` when troubleshooting:
+
+```json
+{
+  "logging": {
+    "enabled": true
+  }
+}
+```
+
+The log file is created at `%APPDATA%\Turbophrase\turbophrase.log` (or under `XDG_CONFIG_HOME/Turbophrase` / your custom `--config` directory). Changes take effect on the next config reload.
+
 ## Supported Providers
 
 ### OpenAI

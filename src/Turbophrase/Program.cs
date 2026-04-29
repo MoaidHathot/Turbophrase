@@ -351,6 +351,9 @@ static class Program
               notifications.showOnProviderChange    Show notification on provider change
               notifications.showProcessingOverlay   Show processing overlay during transform
               notifications.showProcessingAnimation Animate tray icon during transform
+
+            Logging settings (in turbophrase.json):
+              logging.enabled                       Write diagnostic events to turbophrase.log (default: false)
             """);
     }
 }

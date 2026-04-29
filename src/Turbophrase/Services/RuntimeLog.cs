@@ -5,11 +5,30 @@ namespace Turbophrase.Services;
 public static class RuntimeLog
 {
     private static readonly Lock LogLock = new();
+    private static volatile bool _isEnabled;
 
     public static string LogFilePath => Path.Combine(ConfigurationService.ConfigDirectory, "turbophrase.log");
 
+    /// <summary>
+    /// Gets whether diagnostic file logging is currently enabled.
+    /// </summary>
+    public static bool IsEnabled => _isEnabled;
+
+    /// <summary>
+    /// Applies logging configuration. When disabled, calls to <see cref="Write"/> are no-ops.
+    /// </summary>
+    public static void Configure(LoggingSettings settings)
+    {
+        _isEnabled = settings?.Enabled ?? false;
+    }
+
     public static void Write(string message)
     {
+        if (!_isEnabled)
+        {
+            return;
+        }
+
         try
         {
             lock (LogLock)
