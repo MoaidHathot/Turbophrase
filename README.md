@@ -171,6 +171,41 @@ You can also bind a hotkey to a one-off prompt dialog instead of a preset:
 }
 ```
 
+Or bind a hotkey to an operation picker that lists configured presets. Type to filter, press `Enter` to select the top match, or press a visible item number and then `Enter`:
+
+```json
+{
+  "hotkeys": [
+    { "keys": "Ctrl+F7", "action": "preset-picker", "name": "Choose Operation" }
+  ]
+}
+```
+
+Picker order is controlled by `pickerOrder`; lower numbers appear first. Presets are included by default, and can be hidden with `includeInPicker: false`. Non-preset actions are excluded by default, and can be added either through `pickerActions` or by setting `includeInPicker: true` on an existing hotkey action:
+
+```json
+{
+  "hotkeys": [
+    { "keys": "Ctrl+F7", "action": "preset-picker", "name": "Choose Operation" }
+  ],
+  "pickerActions": [
+    { "action": "custom-prompt", "name": "Custom Prompt", "includeInPicker": true, "pickerOrder": 99 }
+  ],
+  "presets": {
+    "grammar": {
+      "name": "Fix Grammar",
+      "systemPrompt": "Fix grammar errors...",
+      "pickerOrder": 1
+    },
+    "casual": {
+      "name": "Make Casual",
+      "systemPrompt": "Rewrite casually...",
+      "includeInPicker": false
+    }
+  }
+}
+```
+
 You can define multiple custom prompt bindings, each with its own system prompt template and optional provider override:
 
 ```json
@@ -214,6 +249,7 @@ Available placeholders:
 **Example key combinations:**
 - `Ctrl+Shift+G`
 - `Ctrl+Alt+T`
+- `Ctrl+Shift+;`
 - `Win+Shift+P`
 - `Ctrl+Alt+Shift+X`
 

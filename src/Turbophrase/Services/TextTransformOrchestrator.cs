@@ -75,6 +75,30 @@ public class TextTransformOrchestrator
     }
 
     /// <summary>
+    /// Transforms previously captured text using the specified preset.
+    /// </summary>
+    public Task<TransformResult> TransformCapturedTextWithPresetAsync(
+        SelectionCaptureResult captureResult,
+        string presetName,
+        bool restoreFocusBeforePaste = true)
+    {
+        if (!captureResult.Success || string.IsNullOrWhiteSpace(captureResult.SelectedText))
+        {
+            RuntimeLog.Write($"captured-preset-transform-invalid-capture error='{captureResult.ErrorMessage}'");
+            return Task.FromResult(TransformResult.Fail(captureResult.ErrorMessage ?? "No text is selected."));
+        }
+
+        if (!_config.Presets.TryGetValue(presetName, out var preset))
+        {
+            RuntimeLog.Write($"preset-not-found preset='{presetName}'");
+            return Task.FromResult(TransformResult.Fail($"Preset '{presetName}' not found."));
+        }
+
+        RuntimeLog.Write($"captured-preset-transform-start preset='{presetName}' provider='{preset.Provider ?? _config.DefaultProvider}'");
+        return TransformTextAsync(captureResult.SelectedText, preset, captureResult.SourceWindowHandle, restoreFocusBeforePaste);
+    }
+
+    /// <summary>
     /// Transforms previously captured text using a user-supplied prompt.
     /// </summary>
     public Task<TransformResult> TransformCapturedTextAsync(

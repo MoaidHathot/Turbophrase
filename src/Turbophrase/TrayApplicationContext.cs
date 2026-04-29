@@ -388,6 +388,12 @@ public class TrayApplicationContext : ApplicationContext
             return;
         }
 
+        if (binding.IsPresetPickerAction)
+        {
+            await ExecutePresetPickerAsync(binding);
+            return;
+        }
+
         if (binding.IsPresetAction)
         {
             await ExecutePresetAsync(binding.Preset, GetBindingDisplayName(binding));
@@ -404,9 +410,58 @@ public class TrayApplicationContext : ApplicationContext
             displayName);
     }
 
+    private async Task ExecutePresetPickerAsync(HotkeyBinding binding)
+    {
+        var captureResult = await _orchestrator.CaptureSelectedTextAsync();
+        if (!captureResult.Success)
+        {
+            ShowTransformResult(TransformResult.Fail(captureResult.ErrorMessage ?? "No text is selected."), GetBindingDisplayName(binding));
+            return;
+        }
+
+        using var dialog = new PresetPickerDialog(GetPickerOperations());
+        if (dialog.ShowDialog() != DialogResult.OK || dialog.SelectedOperation == null)
+        {
+            return;
+        }
+
+        await ExecutePickedOperationAsync(dialog.SelectedOperation, captureResult);
+    }
+
+    private async Task ExecutePickedOperationAsync(PickerOperation operation, SelectionCaptureResult captureResult)
+    {
+        var binding = operation.Binding;
+        if (binding.IsCustomPromptAction)
+        {
+            await ExecuteCustomPromptAsync(binding, captureResult);
+            return;
+        }
+
+        if (binding.IsPresetAction)
+        {
+            await ExecuteTransformWithIndicatorsAsync(
+                async () => await _orchestrator.TransformCapturedTextWithPresetAsync(captureResult, binding.Preset),
+                operation.DisplayName);
+            return;
+        }
+
+        ShowNotification("Turbophrase", $"Unsupported picker action '{binding.Action}'.", isError: true);
+    }
+
     private async Task ExecuteCustomPromptAsync(HotkeyBinding? binding = null)
     {
         var captureResult = await _orchestrator.CaptureSelectedTextAsync();
+        if (!captureResult.Success)
+        {
+            ShowTransformResult(TransformResult.Fail(captureResult.ErrorMessage ?? "No text is selected."), GetBindingDisplayName(binding));
+            return;
+        }
+
+        await ExecuteCustomPromptAsync(binding, captureResult);
+    }
+
+    private async Task ExecuteCustomPromptAsync(HotkeyBinding? binding, SelectionCaptureResult captureResult)
+    {
         if (!captureResult.Success)
         {
             ShowTransformResult(TransformResult.Fail(captureResult.ErrorMessage ?? "No text is selected."), GetBindingDisplayName(binding));
@@ -431,6 +486,55 @@ public class TrayApplicationContext : ApplicationContext
                 BuildCustomPromptSystemPrompt(binding, dialog.PromptText, captureResult.SelectedText ?? string.Empty),
                 binding?.Provider ?? dialog.SelectedProvider),
             GetBindingDisplayName(binding));
+    }
+
+    private List<PickerOperation> GetPickerOperations()
+    {
+        var operations = new List<(int? Order, int Sequence, PickerOperation Operation)>();
+        var sequence = 0;
+
+        foreach (var (presetName, preset) in _config.Presets)
+        {
+            if (!preset.IncludeInPicker)
+            {
+                continue;
+            }
+
+            var binding = new HotkeyBinding { Preset = presetName };
+            var displayName = preset.Name ?? presetName;
+            operations.Add((preset.PickerOrder, sequence++, new PickerOperation(presetName, displayName, binding)));
+        }
+
+        foreach (var action in _config.PickerActions.Concat(_config.Hotkeys.Where(binding => binding.IncludeInPicker)))
+        {
+            if (!action.IncludeInPicker)
+            {
+                continue;
+            }
+
+            operations.Add((action.PickerOrder, sequence++, new PickerOperation(GetPickerActionId(action), GetBindingDisplayName(action), action)));
+        }
+
+        return operations
+            .OrderBy(item => item.Order ?? int.MaxValue)
+            .ThenBy(item => item.Sequence)
+            .Select(item => item.Operation)
+            .ToList();
+    }
+
+    private static string GetPickerActionId(HotkeyBinding binding)
+    {
+        if (!string.IsNullOrWhiteSpace(binding.Name))
+        {
+            return binding.Name;
+        }
+
+        if (!string.IsNullOrWhiteSpace(binding.Action))
+        {
+            return binding.Action;
+        }
+
+        return binding.Preset;
     }
 
     private async Task ExecuteTransformWithIndicatorsAsync(Func<Task<TransformResult>> operation, string displayName)
@@ -491,12 +595,19 @@ public class TrayApplicationContext : ApplicationContext
             return !string.IsNullOrWhiteSpace(binding.Name) ? binding.Name : "Custom Prompt";
         }
 
-        if (_config.Presets.TryGetValue(binding.Preset, out var preset))
+        if (binding.IsPresetPickerAction)
         {
-            return preset.Name ?? binding.Preset;
+            return !string.IsNullOrWhiteSpace(binding.Name) ? binding.Name : "Choose Operation";
         }
 
-        return binding.Preset;
+        return GetPresetDisplayName(binding.Preset);
+    }
+
+    private string GetPresetDisplayName(string presetName)
+    {
+        return _config.Presets.TryGetValue(presetName, out var preset)
+            ? preset.Name ?? presetName
+            : presetName;
     }
 
     private string BuildCustomPromptSystemPrompt(HotkeyBinding? binding, string instruction, string selectedText)

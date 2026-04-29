@@ -14,6 +14,8 @@ public class TurbophraseConfigTests
         Assert.Empty(config.Providers);
         Assert.NotNull(config.Hotkeys);
         Assert.Empty(config.Hotkeys);
+        Assert.NotNull(config.PickerActions);
+        Assert.Empty(config.PickerActions);
         Assert.NotNull(config.Presets);
         Assert.Empty(config.Presets);
         Assert.NotNull(config.Notifications);
@@ -65,18 +67,41 @@ public class TurbophraseConfigTests
     }
 
     [Fact]
+    public void TurbophraseConfig_CanAddPickerActions()
+    {
+        var config = new TurbophraseConfig();
+        config.PickerActions.Add(new HotkeyBinding
+        {
+            Action = "custom-prompt",
+            Name = "Custom Prompt",
+            IncludeInPicker = true,
+            PickerOrder = 10
+        });
+
+        var action = Assert.Single(config.PickerActions);
+        Assert.Equal("custom-prompt", action.Action);
+        Assert.Equal("Custom Prompt", action.Name);
+        Assert.True(action.IncludeInPicker);
+        Assert.Equal(10, action.PickerOrder);
+    }
+
+    [Fact]
     public void TurbophraseConfig_CanAddPresets()
     {
         var config = new TurbophraseConfig();
         config.Presets["grammar"] = new PromptPreset
         {
             Name = "Fix Grammar",
-            SystemPrompt = "Fix grammar errors"
+            SystemPrompt = "Fix grammar errors",
+            IncludeInPicker = false,
+            PickerOrder = 2
         };
 
         Assert.Single(config.Presets);
         Assert.True(config.Presets.ContainsKey("grammar"));
         Assert.Equal("Fix Grammar", config.Presets["grammar"].Name);
+        Assert.False(config.Presets["grammar"].IncludeInPicker);
+        Assert.Equal(2, config.Presets["grammar"].PickerOrder);
     }
 
     [Fact]

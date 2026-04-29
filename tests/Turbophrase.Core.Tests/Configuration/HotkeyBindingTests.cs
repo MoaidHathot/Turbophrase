@@ -15,8 +15,11 @@ public class HotkeyBindingTests
         Assert.Null(binding.Name);
         Assert.Null(binding.SystemPromptTemplate);
         Assert.Null(binding.Provider);
+        Assert.False(binding.IncludeInPicker);
+        Assert.Null(binding.PickerOrder);
         Assert.True(binding.IsPresetAction);
         Assert.False(binding.IsCustomPromptAction);
+        Assert.False(binding.IsPresetPickerAction);
     }
 
     [Fact]
@@ -48,12 +51,33 @@ public class HotkeyBindingTests
         {
             Keys = "Ctrl+Shift+K",
             Action = "custom-prompt",
-            Name = "Ask AI"
+            Name = "Ask AI",
+            IncludeInPicker = true,
+            PickerOrder = 5
         };
 
         Assert.True(binding.IsCustomPromptAction);
         Assert.False(binding.IsPresetAction);
+        Assert.False(binding.IsPresetPickerAction);
         Assert.Equal("Ask AI", binding.Name);
+        Assert.True(binding.IncludeInPicker);
+        Assert.Equal(5, binding.PickerOrder);
+    }
+
+    [Fact]
+    public void HotkeyBinding_PresetPickerAction_IsRecognized()
+    {
+        var binding = new HotkeyBinding
+        {
+            Keys = "Ctrl+F7",
+            Action = "preset-picker",
+            Name = "Choose Operation"
+        };
+
+        Assert.True(binding.IsPresetPickerAction);
+        Assert.False(binding.IsCustomPromptAction);
+        Assert.False(binding.IsPresetAction);
+        Assert.Equal("Choose Operation", binding.Name);
     }
 
     [Fact]

@@ -106,7 +106,17 @@ public class ConfigurationServiceTests
                       "action": "custom-prompt",
                       "name": "Ask AI",
                       "systemPromptTemplate": "Instruction: {instruction}\nText: {text}",
-                      "provider": "openai"
+                      "provider": "openai",
+                      "includeInPicker": true,
+                      "pickerOrder": 7
+                    }
+                  ],
+                  "pickerActions": [
+                    {
+                      "action": "custom-prompt",
+                      "name": "Picker Prompt",
+                      "includeInPicker": true,
+                      "pickerOrder": 8
                     }
                   ]
                 }
@@ -122,7 +132,15 @@ public class ConfigurationServiceTests
             Assert.Equal("Ask AI", binding.Name);
             Assert.Equal("Instruction: {instruction}\nText: {text}", binding.SystemPromptTemplate);
             Assert.Equal("openai", binding.Provider);
+            Assert.True(binding.IncludeInPicker);
+            Assert.Equal(7, binding.PickerOrder);
             Assert.True(binding.IsCustomPromptAction);
+
+            var pickerAction = Assert.Single(config.PickerActions);
+            Assert.Equal("custom-prompt", pickerAction.Action);
+            Assert.Equal("Picker Prompt", pickerAction.Name);
+            Assert.True(pickerAction.IncludeInPicker);
+            Assert.Equal(8, pickerAction.PickerOrder);
         }
         finally
         {

@@ -19,4 +19,15 @@ public class PromptPreset
     /// Optional provider name to use instead of the default.
     /// </summary>
     public string? Provider { get; set; }
+
+    /// <summary>
+    /// Whether this preset should appear in the operation picker.
+    /// Presets are included by default.
+    /// </summary>
+    public bool IncludeInPicker { get; set; } = true;
+
+    /// <summary>
+    /// Optional sort order in the operation picker. Lower values appear first.
+    /// </summary>
+    public int? PickerOrder { get; set; }
 }

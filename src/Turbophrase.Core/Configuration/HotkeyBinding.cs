@@ -39,9 +39,25 @@ public class HotkeyBinding
     public string? Provider { get; set; }
 
     /// <summary>
+    /// Whether this non-preset action should appear in the operation picker.
+    /// Actions are excluded by default unless explicitly opted in.
+    /// </summary>
+    public bool IncludeInPicker { get; set; }
+
+    /// <summary>
+    /// Optional sort order in the operation picker. Lower values appear first.
+    /// </summary>
+    public int? PickerOrder { get; set; }
+
+    /// <summary>
     /// Gets whether this binding executes a custom prompt action.
     /// </summary>
     public bool IsCustomPromptAction => string.Equals(Action, "custom-prompt", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gets whether this binding opens a picker for configured presets.
+    /// </summary>
+    public bool IsPresetPickerAction => string.Equals(Action, "preset-picker", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Gets whether this binding executes a preset action.

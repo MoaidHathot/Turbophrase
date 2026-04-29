@@ -147,14 +147,14 @@ public class GlobalHotkeyService : IDisposable
                     break;
                 default:
                     // This should be the key
-                    if (part.Length == 1)
+                    if (TryParseSpecialKey(part, out var specialKey))
+                    {
+                        key = specialKey;
+                    }
+                    else if (part.Length == 1 && char.IsLetterOrDigit(part[0]))
                     {
                         // Single character key (A-Z, 0-9)
                         key = (uint)char.ToUpperInvariant(part[0]);
-                    }
-                    else if (TryParseSpecialKey(part, out var specialKey))
-                    {
-                        key = specialKey;
                     }
                     else
                     {
@@ -197,6 +197,17 @@ public class GlobalHotkeyService : IDisposable
             "end" => 0x23,
             "pageup" => 0x21,
             "pagedown" => 0x22,
+            ";" or "semicolon" => 0xBA,
+            "=" or "equals" => 0xBB,
+            "," or "comma" => 0xBC,
+            "-" or "minus" => 0xBD,
+            "." or "period" => 0xBE,
+            "/" or "slash" => 0xBF,
+            "`" or "backquote" or "backtick" => 0xC0,
+            "[" or "leftbracket" => 0xDB,
+            "\\" or "backslash" => 0xDC,
+            "]" or "rightbracket" => 0xDD,
+            "'" or "quote" or "apostrophe" => 0xDE,
             _ => 0
         };
 

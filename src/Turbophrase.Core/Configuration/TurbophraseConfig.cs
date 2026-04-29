@@ -21,6 +21,11 @@ public class TurbophraseConfig
     public List<HotkeyBinding> Hotkeys { get; set; } = new();
 
     /// <summary>
+    /// Non-hotkey actions that can be opted into the operation picker.
+    /// </summary>
+    public List<HotkeyBinding> PickerActions { get; set; } = new();
+
+    /// <summary>
     /// Dictionary of prompt presets.
     /// </summary>
     public Dictionary<string, PromptPreset> Presets { get; set; } = new();
@@ -46,7 +51,7 @@ public class CustomPromptSettings
     /// Supports the placeholders {instruction} and {text}.
     /// </summary>
     public string SystemPromptTemplate { get; set; } =
-        "You are a text transformation assistant. Apply the following instruction to the provided text. Return ONLY the transformed text with no explanation or commentary.\n\nInstruction:\n{instruction}\n\nText:\n{text}";
+        "You are a text transformation assistant. Apply the following instruction to the provided text. Return ONLY the transformed text with no explanation or commentary. Do not use em dashes. Use commas, periods, parentheses, or regular hyphens instead.\n\nInstruction:\n{instruction}\n\nText:\n{text}";
 }
 
 /// <summary>
