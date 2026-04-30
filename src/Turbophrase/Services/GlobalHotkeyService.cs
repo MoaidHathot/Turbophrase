@@ -107,9 +107,20 @@ public class GlobalHotkeyService : IDisposable
     /// </summary>
     public void UnregisterAll()
     {
-        foreach (var id in _registeredHotkeys.Keys)
+        var failed = 0;
+        foreach (var (id, binding) in _registeredHotkeys)
         {
-            UnregisterHotKey(_windowHandle, id);
+            if (!UnregisterHotKey(_windowHandle, id))
+            {
+                failed++;
+                var error = Marshal.GetLastWin32Error();
+                System.Diagnostics.Debug.WriteLine($"[Hotkey] Failed to unregister id={id} keys='{binding.Keys}' (error={error}). Likely called from a thread other than the one that registered it.");
+                RuntimeLog.Write($"hotkey-unregister-failed id={id} keys='{binding.Keys}' error={error}");
+            }
+        }
+        if (failed > 0)
+        {
+            RuntimeLog.Write($"hotkey-unregister-summary failed={failed} total={_registeredHotkeys.Count}");
         }
         _registeredHotkeys.Clear();
     }

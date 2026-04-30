@@ -20,11 +20,25 @@ public class TrayApplicationContext : ApplicationContext
     private readonly ConfigurationWatcher _configWatcher;
     private readonly TrayIconAnimator _iconAnimator;
     private readonly ProcessingOverlay _processingOverlay;
+    private readonly SynchronizationContext _uiContext;
+    private readonly int _uiThreadId;
 
     public TrayApplicationContext()
     {
         try
         {
+            // Capture the UI thread's synchronization context so configuration reloads
+            // (raised on a thread-pool thread by FileSystemWatcher) can be marshaled back
+            // to the same thread that registered the global hotkeys. RegisterHotKey/
+            // UnregisterHotKey have thread affinity when called with hWnd=NULL, so we must
+            // run them on this thread or the hotkeys will leak and fail to re-register.
+            if (SynchronizationContext.Current is not WindowsFormsSynchronizationContext)
+            {
+                SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+            }
+            _uiContext = SynchronizationContext.Current!;
+            _uiThreadId = Environment.CurrentManagedThreadId;
+
             // Load configuration
             _config = ConfigurationService.LoadConfiguration();
             RuntimeLog.Configure(_config.Logging);
@@ -111,14 +125,17 @@ public class TrayApplicationContext : ApplicationContext
 
     private void OnConfigurationChanged(object? sender, EventArgs e)
     {
-        // Marshal to UI thread since FileSystemWatcher events come from a thread pool thread
-        if (_trayIcon.ContextMenuStrip?.InvokeRequired == true)
+        // FileSystemWatcher / debounce timer events arrive on a thread-pool thread.
+        // RegisterHotKey/UnregisterHotKey have thread affinity (hotkeys registered
+        // on the UI thread cannot be unregistered or re-registered from another
+        // thread), so always marshal the reload back to the captured UI context.
+        if (Environment.CurrentManagedThreadId == _uiThreadId)
         {
-            _trayIcon.ContextMenuStrip.BeginInvoke(ReloadConfiguration);
+            ReloadConfiguration();
         }
         else
         {
-            ReloadConfiguration();
+            _uiContext.Post(_ => ReloadConfiguration(), null);
         }
     }
 
