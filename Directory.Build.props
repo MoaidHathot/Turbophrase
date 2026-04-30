@@ -1,0 +1,15 @@
+<Project>
+
+  <!--
+    Single source of truth for the Turbophrase product version.
+
+    All .csproj files under this directory inherit these properties
+    automatically, so do NOT redefine <Version> in individual project
+    files. PowerShell scripts (build.ps1, release.ps1) parse this file
+    to keep their default version in sync.
+  -->
+  <PropertyGroup>
+    <Version>1.0.6</Version>
+  </PropertyGroup>
+
+</Project>

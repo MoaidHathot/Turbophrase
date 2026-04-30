@@ -6,7 +6,8 @@
     creating ZIP packages (portable) and optionally installers for distribution.
     Requires .NET 10.0 SDK. Inno Setup is required for building installers.
 .PARAMETER Version
-    The version number (default: 1.0.0)
+    The version number. Defaults to the value in Directory.Build.props,
+    which is the single source of truth for the product version.
 .PARAMETER OutputDir
     The output directory (default: ./artifacts)
 .PARAMETER SkipTests
@@ -14,22 +15,39 @@
 .PARAMETER BuildInstaller
     Build Inno Setup installer in addition to portable ZIP
 .EXAMPLE
-    ./build.ps1 -Version 1.2.0
+    ./build.ps1
 .EXAMPLE
-    ./build.ps1 -Version 1.0.0 -OutputDir ./dist
+    ./build.ps1 -Version 1.2.0 -OutputDir ./dist
 .EXAMPLE
-    ./build.ps1 -Version 1.0.0 -SkipTests
+    ./build.ps1 -SkipTests
 .EXAMPLE
-    ./build.ps1 -Version 1.0.0 -BuildInstaller
+    ./build.ps1 -BuildInstaller
 #>
 param(
-    [string]$Version = "1.0.0",
+    [string]$Version,
     [string]$OutputDir = "./artifacts",
     [switch]$SkipTests,
     [switch]$BuildInstaller
 )
 
 $ErrorActionPreference = "Stop"
+
+function Get-RepoVersion {
+    $propsPath = Join-Path $PSScriptRoot "Directory.Build.props"
+    if (-not (Test-Path $propsPath)) {
+        throw "Directory.Build.props not found at $propsPath"
+    }
+    $xml = [xml](Get-Content -Raw -Path $propsPath)
+    $value = $xml.Project.PropertyGroup.Version
+    if (-not $value) {
+        throw "<Version> element not found in Directory.Build.props"
+    }
+    return ([string]$value).Trim()
+}
+
+if (-not $Version) {
+    $Version = Get-RepoVersion
+}
 
 Write-Host "Building Turbophrase v$Version" -ForegroundColor Cyan
 Write-Host "Output directory: $OutputDir" -ForegroundColor Cyan

@@ -37,7 +37,7 @@
     <ApplicationIcon>Resources\Turbophrase.ico</ApplicationIcon>
     
     <!-- Package metadata -->
-    <Version>1.0.2</Version>
+    <!-- Version is defined centrally in <RepoRoot>/Directory.Build.props -->
     <Authors>Moaid Hathot</Authors>
     <Company>Turbophrase</Company>
     <Product>Turbophrase</Product>

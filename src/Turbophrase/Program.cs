@@ -1,6 +1,7 @@
 using Turbophrase;
 using Turbophrase.Core.Configuration;
 using Turbophrase.Services;
+using System.Reflection;
 
 /// <summary>
 /// Turbophrase - AI-powered text transformation tool.
@@ -8,6 +9,30 @@ using Turbophrase.Services;
 static class Program
 {
     private const string SingleInstanceMutexName = @"Local\Turbophrase.SingleInstance";
+
+    /// <summary>
+    /// Product version, read from the assembly's <see cref="AssemblyInformationalVersionAttribute"/>.
+    /// The version itself is defined centrally in &lt;RepoRoot&gt;/Directory.Build.props.
+    /// </summary>
+    private static string ProductVersion
+    {
+        get
+        {
+            var informational = typeof(Program).Assembly
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+                .InformationalVersion;
+
+            if (!string.IsNullOrEmpty(informational))
+            {
+                // The .NET SDK appends "+<gitsha>" when building from a git repo.
+                // Strip it so the user-facing version stays clean (e.g. "1.0.6").
+                var plusIndex = informational.IndexOf('+');
+                return plusIndex >= 0 ? informational[..plusIndex] : informational;
+            }
+
+            return typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+        }
+    }
 
     [STAThread]
     static int Main(string[] args)
@@ -141,7 +166,7 @@ static class Program
             case "version":
             case "--version":
             case "-v":
-                Console.WriteLine("Turbophrase v1.0.2");
+                Console.WriteLine($"Turbophrase v{ProductVersion}");
                 return 0;
 
             default:

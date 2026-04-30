@@ -4,21 +4,23 @@
 .DESCRIPTION
     Normalizes the supplied version to a v-prefixed git tag, creates the tag,
     and pushes it to origin to trigger the GitHub Actions release workflow.
+    When -Version is omitted, the version from Directory.Build.props is used.
 .PARAMETER Version
     The version to release. Accepts 1.0.3 or v1.0.3.
+    Defaults to the <Version> in Directory.Build.props (the single source of truth).
 .PARAMETER Force
     Skip the confirmation prompt before creating and pushing the tag.
 .PARAMETER DryRun
     Show what would be done without making any changes.
 .EXAMPLE
-    ./release.ps1 -Version 1.0.3
+    ./release.ps1
 .EXAMPLE
-    ./release.ps1 -Version v1.0.3 -Force
+    ./release.ps1 -Version 1.0.3 -Force
 .EXAMPLE
-    ./release.ps1 -Version 1.0.3 -DryRun
+    ./release.ps1 -DryRun
 #>
 param(
-    [Parameter(Mandatory = $true, Position = 0)]
+    [Parameter(Position = 0)]
     [ValidatePattern('^v?\d+\.\d+\.\d+(-[\w.]+)?$')]
     [string]$Version,
 
@@ -27,6 +29,23 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+function Get-RepoVersion {
+    $propsPath = Join-Path $PSScriptRoot "Directory.Build.props"
+    if (-not (Test-Path $propsPath)) {
+        throw "Directory.Build.props not found at $propsPath"
+    }
+    $xml = [xml](Get-Content -Raw -Path $propsPath)
+    $value = $xml.Project.PropertyGroup.Version
+    if (-not $value) {
+        throw "<Version> element not found in Directory.Build.props"
+    }
+    return ([string]$value).Trim()
+}
+
+if (-not $Version) {
+    $Version = Get-RepoVersion
+}
 
 $normalizedVersion = $Version.Trim()
 $tag = if ($normalizedVersion.StartsWith("v")) { $normalizedVersion } else { "v$normalizedVersion" }
