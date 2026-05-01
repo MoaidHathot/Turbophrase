@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Turbophrase MSIX manifest.
+
+  This file is consumed by `installer/msix/build-msix.ps1` to package the
+  published Turbophrase exe into an MSIX. Tokens of the form `__TOKEN__`
+  are replaced at packaging time:
+
+    __VERSION__    -> Directory.Build.props <Version>, padded to four parts
+                      (Microsoft Store rejects 3-part versions).
+    __ARCH__       -> "x64" or "arm64".
+    __PUBLISHER__  -> The Publisher CN registered for your Microsoft Store
+                      account (e.g. "CN=12345678-ABCD-1234-ABCD-1234567890AB").
+                      For sideload-signed builds, supply your code signing
+                      cert subject instead.
+    __PUBLISHERDISPLAY__ -> Display name shown in the Store and in
+                      Settings > Apps. Typically "Moaid Hathot".
+
+  After substitution, run `makeappx pack` (Windows 10 SDK) to build the
+  .msix, then `signtool sign` with the matching certificate.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap5 rescap">
+
+  <Identity
+    Name="Turbophrase.Turbophrase"
+    Publisher="__PUBLISHER__"
+    Version="__VERSION__"
+    ProcessorArchitecture="__ARCH__" />
+
+  <Properties>
+    <DisplayName>Turbophrase</DisplayName>
+    <PublisherDisplayName>__PUBLISHERDISPLAY__</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>AI-powered text transformation tool. Select text anywhere, press a hotkey, and transform it using AI.</Description>
+  </Properties>
+
+  <Dependencies>
+    <!--
+      Windows 10 1809 (build 17763) is the minimum version that supports
+      Win32 packaged apps with global hotkeys + Credential Manager + the
+      StartupTask extension we use below.
+    -->
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="Turbophrase"
+                 Executable="Turbophrase.exe"
+                 EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Turbophrase"
+        Description="AI-powered text transformation tool."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile
+          Wide310x150Logo="Assets\Wide310x150Logo.png"
+          Square71x71Logo="Assets\Square71x71Logo.png"
+          Square310x310Logo="Assets\Square310x310Logo.png"
+          ShortName="Turbophrase" />
+        <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="transparent" />
+      </uap:VisualElements>
+
+      <Extensions>
+        <!--
+          Auto-start support. The TaskId here MUST match the constant in
+          PackagedStartupManager.cs ("TurbophraseStartup"). Enabled=false
+          means the user must opt in via the tray menu or Settings UI;
+          our PackagedStartupManager.Enable() calls RequestEnableAsync().
+        -->
+        <uap5:Extension Category="windows.startupTask">
+          <uap5:StartupTask
+            TaskId="TurbophraseStartup"
+            Enabled="false"
+            DisplayName="Turbophrase" />
+        </uap5:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!--
+      runFullTrust is required because Turbophrase uses Win32-only APIs
+      (RegisterHotKey, Credential Manager, clipboard send-keys). This is
+      allowed under Microsoft Store policy for desktop apps.
+    -->
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

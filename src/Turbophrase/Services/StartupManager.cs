@@ -1,59 +1,104 @@
-using Microsoft.Win32;
-
 namespace Turbophrase.Services;
 
 /// <summary>
-/// Manages Windows startup registration for Turbophrase.
+/// Static facade that callers continue to use for startup registration.
+/// Selects between <see cref="Win32StartupManager"/> and
+/// <see cref="PackagedStartupManager"/> at runtime.
 /// </summary>
+/// <remarks>
+/// The selection runs once on first access. We probe for the WinRT
+/// <c>Windows.ApplicationModel.Package.Current</c> indirectly: the Win32
+/// implementation is correct for both unpackaged and packaged contexts
+/// today, but Microsoft Store policy requires packaged apps to use the
+/// <c>StartupTask</c> API. <see cref="PackagedStartupManager"/> returns
+/// gracefully when the API is unavailable, so we attempt it first under
+/// MSIX and fall back to the registry path otherwise.
+/// </remarks>
 public static class StartupManager
 {
-    private const string RegistryKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string AppName = "Turbophrase";
+    private static readonly Lazy<IStartupManager> _impl = new(SelectImplementation);
 
     /// <summary>
-    /// Enables Turbophrase to run at Windows startup.
+    /// The selected implementation. Exposed for tests; production callers
+    /// should use the static methods on this class.
     /// </summary>
-    /// <param name="configPath">Optional custom config path to use at startup.</param>
-    public static void Enable(string? configPath = null)
+    public static IStartupManager Implementation => _impl.Value;
+
+    /// <inheritdoc cref="IStartupManager.IsEnabled"/>
+    public static bool IsEnabled() => _impl.Value.IsEnabled();
+
+    /// <inheritdoc cref="IStartupManager.Enable(string?)"/>
+    public static void Enable(string? configPath = null) => _impl.Value.Enable(configPath);
+
+    /// <inheritdoc cref="IStartupManager.Disable"/>
+    public static void Disable() => _impl.Value.Disable();
+
+    /// <summary>
+    /// Returns the registered command line (Win32) or the MSIX startup task
+    /// description, depending on the active implementation.
+    /// </summary>
+    public static string? GetStartupCommand() => _impl.Value.Describe();
+
+    private static IStartupManager SelectImplementation()
     {
-        using var key = Registry.CurrentUser.OpenSubKey(RegistryKeyPath, writable: true);
-        if (key == null)
-            throw new InvalidOperationException("Could not open registry key.");
+        if (IsRunningPackaged())
+        {
+            // Try the MSIX path first; if the StartupTask API is missing
+            // for any reason, fall back to Win32.
+            var packaged = new PackagedStartupManager();
+            if (packaged.Describe() != null || TryGetPackageId() != null)
+            {
+                return packaged;
+            }
+        }
 
-        var exePath = Environment.ProcessPath
-            ?? throw new InvalidOperationException("Could not determine executable path.");
-
-        var command = string.IsNullOrEmpty(configPath)
-            ? $"\"{exePath}\""
-            : $"\"{exePath}\" --config \"{Path.GetFullPath(configPath)}\"";
-
-        key.SetValue(AppName, command);
+        return new Win32StartupManager();
     }
 
     /// <summary>
-    /// Disables Turbophrase from running at Windows startup.
+    /// Returns true when the current process has a Package identity (i.e.,
+    /// installed via MSIX). Uses <c>GetCurrentPackageId</c> via P/Invoke so
+    /// no WinRT reference is required at compile time.
     /// </summary>
-    public static void Disable()
+    public static bool IsRunningPackaged() => TryGetPackageId() != null;
+
+    private static string? TryGetPackageId()
     {
-        using var key = Registry.CurrentUser.OpenSubKey(RegistryKeyPath, writable: true);
-        key?.DeleteValue(AppName, throwOnMissingValue: false);
+        try
+        {
+            uint length = 0;
+            var rc = NativeMethods.GetCurrentPackageFullName(ref length, null);
+            // ERROR_INSUFFICIENT_BUFFER (122) means "yes, there is a package
+            // identity, here is its required buffer size". APPMODEL_ERROR_NO_PACKAGE
+            // (15700) means "no package identity" -- i.e., we're unpackaged.
+            if (rc == 15700 /* APPMODEL_ERROR_NO_PACKAGE */)
+            {
+                return null;
+            }
+
+            if (length == 0)
+            {
+                return null;
+            }
+
+            var buffer = new char[length];
+            rc = NativeMethods.GetCurrentPackageFullName(ref length, buffer);
+            if (rc != 0)
+            {
+                return null;
+            }
+
+            return new string(buffer, 0, (int)length - 1);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
-    /// <summary>
-    /// Checks if Turbophrase is configured to run at Windows startup.
-    /// </summary>
-    public static bool IsEnabled()
+    private static class NativeMethods
     {
-        using var key = Registry.CurrentUser.OpenSubKey(RegistryKeyPath);
-        return key?.GetValue(AppName) != null;
-    }
-
-    /// <summary>
-    /// Gets the current startup command if registered.
-    /// </summary>
-    public static string? GetStartupCommand()
-    {
-        using var key = Registry.CurrentUser.OpenSubKey(RegistryKeyPath);
-        return key?.GetValue(AppName) as string;
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        public static extern int GetCurrentPackageFullName(ref uint packageFullNameLength, char[]? packageFullName);
     }
 }

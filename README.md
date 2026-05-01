@@ -27,6 +27,14 @@ Extract and run `Turbophrase.exe`.
 winget install Turbophrase.Turbophrase
 ```
 
+### Microsoft Store / MSIX
+
+Turbophrase can also be packaged for the Microsoft Store or as a
+sideload-signed `.msix`. See [docs/store.md](docs/store.md) for the full
+submission and packaging workflow. The same `Turbophrase.exe` runs in
+both contexts; configuration paths, `XDG_CONFIG_HOME`, `--config`,
+hotkeys, and Credential Manager all behave identically.
+
 ## Configuration
 
 On first run, Turbophrase creates a configuration file at `%APPDATA%\Turbophrase\turbophrase.json`.

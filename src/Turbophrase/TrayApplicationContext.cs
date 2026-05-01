@@ -2,6 +2,7 @@ using System.Reflection;
 using Turbophrase.Core.Abstractions;
 using Turbophrase.Core.Configuration;
 using Turbophrase.Services;
+using Turbophrase.Settings;
 
 namespace Turbophrase;
 
@@ -22,6 +23,7 @@ public class TrayApplicationContext : ApplicationContext
     private readonly ProcessingOverlay _processingOverlay;
     private readonly SynchronizationContext _uiContext;
     private readonly int _uiThreadId;
+    private SettingsForm? _settingsForm;
 
     public TrayApplicationContext()
     {
@@ -44,6 +46,20 @@ public class TrayApplicationContext : ApplicationContext
             RuntimeLog.Configure(_config.Logging);
             RuntimeLog.Write("app-start");
             RuntimeLog.Write($"config-loaded path='{ConfigurationService.ConfigFilePath}' hotkeys={_config.Hotkeys.Count} defaultProvider='{_config.DefaultProvider}' logging={_config.Logging.Enabled}");
+
+            // First-run onboarding: if no provider has usable credentials,
+            // show the wizard before bringing up the rest of the tray. The
+            // wizard writes turbophrase.json directly; we then re-load.
+            if (FirstRunWizard.ShouldShowFor(_config))
+            {
+                using var wizard = new FirstRunWizard();
+                if (wizard.ShowDialog() == DialogResult.OK)
+                {
+                    _config = ConfigurationService.LoadConfiguration();
+                    RuntimeLog.Configure(_config.Logging);
+                    RuntimeLog.Write("first-run-wizard-finished");
+                }
+            }
 
             // Initialize services
             _hotkeyService = new GlobalHotkeyService(IntPtr.Zero);
@@ -175,13 +191,38 @@ public class TrayApplicationContext : ApplicationContext
         }
     }
 
+    /// <summary>
+    /// Opens the Settings window. If one is already open, brings it to the
+    /// foreground instead of creating a second instance. The window is
+    /// non-modal and shares the underlying turbophrase.json with the tray:
+    /// saves trigger the existing ConfigurationWatcher and hot-reload path,
+    /// so no in-memory state is duplicated.
+    /// </summary>
+    public void OpenSettingsWindow()
+    {
+        if (_settingsForm != null && !_settingsForm.IsDisposed)
+        {
+            if (_settingsForm.WindowState == FormWindowState.Minimized)
+            {
+                _settingsForm.WindowState = FormWindowState.Normal;
+            }
+
+            _settingsForm.Activate();
+            _settingsForm.BringToFront();
+            return;
+        }
+
+        _settingsForm = new SettingsForm();
+        _settingsForm.FormClosed += (_, _) => _settingsForm = null;
+        _settingsForm.Show();
+    }
+
     private void ChangeDefaultProvider(string providerName)
     {
         try
         {
             // Save the new default provider to config file
             ConfigurationService.SaveDefaultProvider(providerName);
-
             // Update in-memory config
             _config.DefaultProvider = providerName;
             _orchestrator = new TextTransformOrchestrator(_config);
@@ -319,6 +360,11 @@ public class TrayApplicationContext : ApplicationContext
         menu.Items.Add(providersMenu);
 
         menu.Items.Add(new ToolStripSeparator());
+
+        // Settings UI (lazy)
+        var settingsItem = new ToolStripMenuItem("Settings...");
+        settingsItem.Click += (_, _) => OpenSettingsWindow();
+        menu.Items.Add(settingsItem);
 
         // Open config folder
         var configItem = new ToolStripMenuItem("Open Config Folder");
@@ -717,6 +763,12 @@ public class TrayApplicationContext : ApplicationContext
     {
         if (disposing)
         {
+            if (_settingsForm != null && !_settingsForm.IsDisposed)
+            {
+                _settingsForm.Close();
+                _settingsForm.Dispose();
+                _settingsForm = null;
+            }
             _processingOverlay.Dispose();
             _iconAnimator.Dispose();
             _configWatcher.Dispose();

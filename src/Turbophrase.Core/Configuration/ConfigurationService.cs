@@ -15,6 +15,13 @@ public partial class ConfigurationService
     private const string LegacyConfigFileName = "config.json";
 
     private static string? _customConfigFilePath;
+    private static ISecretsResolver _secretsResolver = NullSecretsResolver.Instance;
+
+    /// <summary>
+    /// Prefix that identifies a Credential Manager-backed secret reference in
+    /// configuration values, e.g., <c>@credman:openai</c>.
+    /// </summary>
+    public const string CredManPrefix = "@credman:";
 
     private static readonly Lazy<string> DefaultConfigDirectoryLazy = new(() =>
     {
@@ -118,6 +125,24 @@ public partial class ConfigurationService
     /// Gets the custom configuration file path, or null if using default.
     /// </summary>
     public static string? CustomConfigFilePath => _customConfigFilePath;
+
+    /// <summary>
+    /// Registers the secrets resolver used to expand <c>@credman:</c>
+    /// references when configuration is loaded. Platform-specific projects
+    /// (for example the Turbophrase tray app on Windows) should call this once
+    /// at startup. When no resolver is registered the default
+    /// <see cref="NullSecretsResolver"/> is used and references are left as
+    /// literal strings.
+    /// </summary>
+    public static void SetSecretsResolver(ISecretsResolver resolver)
+    {
+        _secretsResolver = resolver ?? NullSecretsResolver.Instance;
+    }
+
+    /// <summary>
+    /// Gets the currently registered secrets resolver.
+    /// </summary>
+    public static ISecretsResolver SecretsResolver => _secretsResolver;
 
     /// <summary>
     /// Loads the configuration from the config file and environment variables.
@@ -335,25 +360,49 @@ public partial class ConfigurationService
     {
         foreach (var provider in config.Providers.Values)
         {
-            provider.ApiKey = ResolveEnvironmentVariable(provider.ApiKey);
-            provider.Endpoint = ResolveEnvironmentVariable(provider.Endpoint);
-            provider.Model = ResolveEnvironmentVariable(provider.Model);
-            provider.DeploymentName = ResolveEnvironmentVariable(provider.DeploymentName);
+            provider.ApiKey = ResolveSecretReference(provider.ApiKey);
+            provider.Endpoint = ResolveSecretReference(provider.Endpoint);
+            provider.Model = ResolveSecretReference(provider.Model);
+            provider.DeploymentName = ResolveSecretReference(provider.DeploymentName);
         }
     }
 
-    private static string? ResolveEnvironmentVariable(string? value)
+    /// <summary>
+    /// Resolves a configuration value, expanding either an <c>@credman:NAME</c>
+    /// reference (via the registered <see cref="ISecretsResolver"/>) or any
+    /// <c>${ENV_VAR}</c> environment variable references contained in the
+    /// value. Returns the original value unchanged when no reference is
+    /// found, when the secret is missing, or when the env var is unset.
+    /// </summary>
+    public static string? ResolveSecretReference(string? value)
     {
         if (string.IsNullOrEmpty(value))
+        {
             return value;
+        }
 
-        // Match ${ENV_VAR} pattern
+        // Whole-value Credential Manager reference (no embedding inside text).
+        if (value.StartsWith(CredManPrefix, StringComparison.Ordinal))
+        {
+            var name = value.Substring(CredManPrefix.Length);
+            if (string.IsNullOrEmpty(name))
+            {
+                return value;
+            }
+
+            var resolved = _secretsResolver.TryRead(name);
+            return resolved ?? value;
+        }
+
+        // Inline ${ENV_VAR} expansion (preserves existing behaviour).
         return EnvVarPattern().Replace(value, match =>
         {
             var envVarName = match.Groups[1].Value;
             return Environment.GetEnvironmentVariable(envVarName) ?? match.Value;
         });
     }
+
+    private static string? ResolveEnvironmentVariable(string? value) => ResolveSecretReference(value);
 
     [GeneratedRegex(@"\$\{([^}]+)\}")]
     private static partial Regex EnvVarPattern();

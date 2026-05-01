@@ -42,6 +42,10 @@ static class Program
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 
+        // Register the Win32-backed secrets resolver so @credman: references
+        // in turbophrase.json are expanded by ConfigurationService.
+        ConfigurationService.SetSecretsResolver(new SecretsStore());
+
         // Parse --config and --init-config arguments
         string? customConfigPath = null;
         bool initConfigIfMissing = false;
@@ -156,6 +160,12 @@ static class Program
 
             case "startup":
                 return StartupCommand(args.Skip(1).ToArray());
+
+            case "settings":
+                return SettingsCommand();
+
+            case "secrets":
+                return SecretsCommand(args.Skip(1).ToArray());
 
             case "help":
             case "--help":
@@ -282,6 +292,147 @@ static class Program
         }
     }
 
+    private static int SecretsCommand(string[] args)
+    {
+        var store = new SecretsStore();
+
+        if (args.Length == 0 || args[0] == "list")
+        {
+            var names = store.List();
+            if (names.Count == 0)
+            {
+                Console.WriteLine("No secrets stored.");
+                return 0;
+            }
+
+            Console.WriteLine("Stored secrets (target prefix: 'Turbophrase:'):");
+            foreach (var name in names)
+            {
+                Console.WriteLine($"  {name}");
+            }
+            return 0;
+        }
+
+        switch (args[0])
+        {
+            case "set":
+                if (args.Length < 2)
+                {
+                    Console.Error.WriteLine("Usage: turbophrase secrets set <name> [value]");
+                    Console.Error.WriteLine("If <value> is omitted, the secret is read from stdin.");
+                    return 1;
+                }
+                {
+                    var name = args[1];
+                    string value;
+                    if (args.Length >= 3)
+                    {
+                        value = args[2];
+                    }
+                    else
+                    {
+                        Console.Error.Write("Enter secret (input is hidden): ");
+                        value = ReadHiddenLine();
+                        Console.Error.WriteLine();
+                    }
+
+                    try
+                    {
+                        store.Save(name, value);
+                        Console.WriteLine($"Saved secret 'Turbophrase:{name}'.");
+                        Console.WriteLine($"Reference it from turbophrase.json as: \"@credman:{name}\"");
+                        return 0;
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.Error.WriteLine($"Failed: {ex.Message}");
+                        return 1;
+                    }
+                }
+
+            case "get":
+                if (args.Length < 2)
+                {
+                    Console.Error.WriteLine("Usage: turbophrase secrets get <name>");
+                    return 1;
+                }
+                {
+                    var value = store.TryRead(args[1]);
+                    if (value == null)
+                    {
+                        Console.Error.WriteLine("Secret not found.");
+                        return 1;
+                    }
+                    Console.WriteLine(value);
+                    return 0;
+                }
+
+            case "remove":
+            case "delete":
+                if (args.Length < 2)
+                {
+                    Console.Error.WriteLine("Usage: turbophrase secrets remove <name>");
+                    return 1;
+                }
+                try
+                {
+                    var existed = store.Delete(args[1]);
+                    Console.WriteLine(existed ? "Removed." : "Secret was not present.");
+                    return 0;
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Failed: {ex.Message}");
+                    return 1;
+                }
+
+            default:
+                Console.Error.WriteLine($"Unknown secrets subcommand: {args[0]}");
+                Console.Error.WriteLine("Usage: turbophrase secrets [list|get <name>|set <name> [value]|remove <name>]");
+                return 1;
+        }
+    }
+
+    private static string ReadHiddenLine()
+    {
+        var sb = new System.Text.StringBuilder();
+        ConsoleKeyInfo info;
+        while ((info = Console.ReadKey(intercept: true)).Key != ConsoleKey.Enter)
+        {
+            if (info.Key == ConsoleKey.Backspace)
+            {
+                if (sb.Length > 0)
+                {
+                    sb.Length--;
+                }
+            }
+            else if (!char.IsControl(info.KeyChar))
+            {
+                sb.Append(info.KeyChar);
+            }
+        }
+        return sb.ToString();
+    }
+
+    private static int SettingsCommand()
+    {
+        // Launches the Settings UI as a one-shot foreground window. Useful when
+        // the tray app isn't running (e.g., from a fresh terminal). When the
+        // tray IS running, users typically open Settings from the tray menu.
+        ApplicationConfiguration.Initialize();
+        try
+        {
+            using var form = new Turbophrase.Settings.SettingsForm();
+            Application.Run(form);
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            return 1;
+        }
+    }
+
     private static int StartupCommand(string[] args)
     {
         if (args.Length == 0 || args[0] == "--status")
@@ -345,6 +496,11 @@ static class Program
               turbophrase startup                Show startup registration status
               turbophrase startup --enable       Enable run at Windows startup
               turbophrase startup --disable      Disable run at Windows startup
+              turbophrase settings               Open the Settings UI
+              turbophrase secrets list           List secrets stored in Credential Manager
+              turbophrase secrets set <name>     Save a secret (value read from stdin if omitted)
+              turbophrase secrets get <name>     Print a stored secret
+              turbophrase secrets remove <name>  Delete a stored secret
               turbophrase help                   Show this help message
               turbophrase version                Show version information
 
