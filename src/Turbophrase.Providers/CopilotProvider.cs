@@ -1,4 +1,5 @@
 using GitHub.Copilot.SDK;
+using Microsoft.Extensions.AI;
 using Turbophrase.Core.Abstractions;
 
 namespace Turbophrase.Providers;
@@ -16,15 +17,21 @@ public class CopilotProvider(string name, Turbophrase.Core.Configuration.Provide
     private bool _isInitialized;
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
-    public override async Task<string> TransformTextAsync(string text, string systemPrompt, CancellationToken cancellationToken = default)
+    public override async Task<string> TransformTextAsync(
+        string text,
+        string systemPrompt,
+        TransformOptions? options,
+        CancellationToken cancellationToken = default)
     {
         var client = await GetOrCreateClientAsync();
         var model = GetModelOrDefault(DefaultModel);
+        var reasoningEffort = ReasoningEffortMapping.ToCopilot(options?.ReasoningEffort);
 
         // Create a session with the system message
         await using var session = await client.CreateSessionAsync(new SessionConfig
         {
             Model = model,
+            ReasoningEffort = reasoningEffort,
             SystemMessage = new SystemMessageConfig
             {
                 Mode = SystemMessageMode.Replace,
@@ -129,8 +136,7 @@ public class CopilotProvider(string name, Turbophrase.Core.Configuration.Provide
             {
                 CliPath = cliPath,
                 UseLoggedInUser = true,
-                AutoStart = true,
-                AutoRestart = true
+                AutoStart = true
             });
 
             await _client.StartAsync();

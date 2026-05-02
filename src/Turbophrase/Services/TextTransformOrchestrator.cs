@@ -277,7 +277,8 @@ public class TextTransformOrchestrator
             string transformedText;
             try
             {
-                transformedText = await provider.TransformTextAsync(selectedText, preset.SystemPrompt);
+                var transformOptions = new TransformOptions(preset.ReasoningEffort);
+                transformedText = await provider.TransformTextAsync(selectedText, preset.SystemPrompt, transformOptions);
             }
             catch (Exception ex)
             {

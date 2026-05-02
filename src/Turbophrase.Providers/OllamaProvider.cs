@@ -29,13 +29,18 @@ public class OllamaProvider : AIProviderBase
         };
     }
 
-    public override async Task<string> TransformTextAsync(string text, string systemPrompt, CancellationToken cancellationToken = default)
+    public override async Task<string> TransformTextAsync(
+        string text,
+        string systemPrompt,
+        TransformOptions? options,
+        CancellationToken cancellationToken = default)
     {
         var request = new OllamaRequest
         {
             Model = _model,
             Prompt = $"{systemPrompt}\n\n{text}",
-            Stream = false
+            Stream = false,
+            Think = ReasoningEffortMapping.ToOllamaThink(options?.ReasoningEffort),
         };
 
         var response = await _httpClient.PostAsJsonAsync("/api/generate", request, cancellationToken);
@@ -59,7 +64,7 @@ public class OllamaProvider : AIProviderBase
         }
     }
 
-    private sealed class OllamaRequest
+    internal sealed class OllamaRequest
     {
         [JsonPropertyName("model")]
         public required string Model { get; set; }
@@ -69,6 +74,15 @@ public class OllamaProvider : AIProviderBase
 
         [JsonPropertyName("stream")]
         public bool Stream { get; set; }
+
+        /// <summary>
+        /// Ollama's reasoning toggle. Sent as the JSON <c>think</c> field
+        /// when non-null; omitted when null so the model's default applies.
+        /// Models that don't support reasoning ignore it.
+        /// </summary>
+        [JsonPropertyName("think")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public bool? Think { get; set; }
     }
 
     private sealed class OllamaResponse

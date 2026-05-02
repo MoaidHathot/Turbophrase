@@ -21,7 +21,11 @@ public class AnthropicProvider : AIProviderBase
         _client = new AnthropicClient(apiKey);
     }
 
-    public override async Task<string> TransformTextAsync(string text, string systemPrompt, CancellationToken cancellationToken = default)
+    public override async Task<string> TransformTextAsync(
+        string text,
+        string systemPrompt,
+        TransformOptions? options,
+        CancellationToken cancellationToken = default)
     {
         var messages = new List<Message>
         {
@@ -36,8 +40,25 @@ public class AnthropicProvider : AIProviderBase
             Messages = messages
         };
 
+        var anthropicEffort = ReasoningEffortMapping.ToAnthropic(options?.ReasoningEffort);
+        if (anthropicEffort is not null)
+        {
+            // Adaptive thinking: model decides when to think and how
+            // hard, guided by the effort hint. With thinking enabled
+            // Anthropic requires temperature == 1.0 (or unset).
+            parameters.Thinking = new ThinkingParameters
+            {
+                Type = ThinkingType.adaptive,
+            };
+            parameters.OutputConfig = new OutputConfig
+            {
+                Effort = anthropicEffort,
+            };
+            parameters.Temperature = 1.0m;
+        }
+
         var response = await _client.Messages.GetClaudeMessageAsync(parameters, cancellationToken);
-        
+
         return response.Message.ToString();
     }
 

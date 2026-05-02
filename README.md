@@ -122,7 +122,7 @@ You can define your own text transformations and hotkeys in `turbophrase.json`.
 
 ### Adding a Custom Preset
 
-Presets define the AI prompt used for transformation. Each preset can optionally use a different provider:
+Presets define the AI prompt used for transformation. Each preset can optionally use a different provider and request a specific reasoning effort:
 
 ```json
 {
@@ -140,16 +140,34 @@ Presets define the AI prompt used for transformation. Each preset can optionally
     "summarize": {
       "name": "Summarize",
       "systemPrompt": "Summarize the following text in 2-3 sentences. Return ONLY the summary.",
-      "provider": "anthropic"
+      "provider": "anthropic",
+      "reasoningEffort": "medium"
     },
     "code-review": {
       "name": "Code Review",
       "systemPrompt": "Review this code and suggest improvements. Be concise.",
-      "provider": "copilot"
+      "provider": "copilot",
+      "reasoningEffort": "high"
     }
   }
 }
 ```
+
+#### Reasoning effort
+
+`reasoningEffort` is optional. When set, it tells the provider how much "thinking" to do before answering. Supported values:
+
+| Value | Meaning |
+|---|---|
+| omitted / `null` | Inherit -- no reasoning field is sent; the provider uses its own default |
+| `"off"` | Explicitly disable reasoning where supported (Anthropic: thinking off; Ollama: `think:false`). On OpenAI/Copilot it clamps to the lowest available level |
+| `"minimal"` | Native on OpenAI/Azure; clamps up to `low` on Anthropic and Copilot |
+| `"low"` | Low effort |
+| `"medium"` | Medium effort |
+| `"high"` | High effort |
+| `"xHigh"` | Native on Copilot (`xhigh`) and Anthropic (`max`); clamps down to `high` on OpenAI/Azure |
+
+Reasoning is ignored on models that don't support it.
 
 ### Adding Custom Hotkeys
 

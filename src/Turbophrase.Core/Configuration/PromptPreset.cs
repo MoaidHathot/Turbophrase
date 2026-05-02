@@ -30,4 +30,16 @@ public class PromptPreset
     /// Optional sort order in the operation picker. Lower values appear first.
     /// </summary>
     public int? PickerOrder { get; set; }
+
+    /// <summary>
+    /// Optional reasoning effort override forwarded to the provider on each
+    /// request. <c>null</c> means "no opinion": the provider sends no
+    /// reasoning-related field and the underlying API uses its own default.
+    ///
+    /// Each provider maps this enum to its native shape; providers that do
+    /// not support reasoning silently ignore it. See
+    /// <see cref="ReasoningEffort"/> for per-value semantics and per-provider
+    /// clamping behaviour.
+    /// </summary>
+    public ReasoningEffort? ReasoningEffort { get; set; }
 }

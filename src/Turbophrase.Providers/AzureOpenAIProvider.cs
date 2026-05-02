@@ -7,7 +7,11 @@ using Turbophrase.Core.Configuration;
 namespace Turbophrase.Providers;
 
 /// <summary>
-/// AI provider for Azure OpenAI Service.
+/// AI provider for Azure OpenAI Service. Stays on the Chat Completions
+/// surface (Azure.AI.OpenAI 2.1.0 stable doesn't expose ResponsesClient),
+/// but the bumped transitive OpenAI 2.10 dependency means
+/// <see cref="ChatCompletionOptions.ReasoningEffortLevel"/> is now a
+/// typed property — no raw-JSON injection needed.
 /// </summary>
 public class AzureOpenAIProvider : AIProviderBase
 {
@@ -26,7 +30,11 @@ public class AzureOpenAIProvider : AIProviderBase
         _client = azureClient.GetChatClient(deploymentName);
     }
 
-    public override async Task<string> TransformTextAsync(string text, string systemPrompt, CancellationToken cancellationToken = default)
+    public override async Task<string> TransformTextAsync(
+        string text,
+        string systemPrompt,
+        TransformOptions? options,
+        CancellationToken cancellationToken = default)
     {
         var messages = new List<ChatMessage>
         {
@@ -34,13 +42,23 @@ public class AzureOpenAIProvider : AIProviderBase
             new UserChatMessage(text)
         };
 
-        var options = new ChatCompletionOptions
+        var requestOptions = new ChatCompletionOptions
         {
             MaxOutputTokenCount = GetMaxTokensOrDefault(DefaultMaxTokens),
-            Temperature = GetTemperatureOrDefault(DefaultTemperature)
         };
 
-        var response = await _client.CompleteChatAsync(messages, options, cancellationToken);
+        var reasoning = ReasoningEffortMapping.ToOpenAIChat(options?.ReasoningEffort);
+        if (reasoning is not null)
+        {
+            requestOptions.ReasoningEffortLevel = reasoning;
+            // Reasoning-capable models reject temperature; omit it.
+        }
+        else
+        {
+            requestOptions.Temperature = GetTemperatureOrDefault(DefaultTemperature);
+        }
+
+        var response = await _client.CompleteChatAsync(messages, requestOptions, cancellationToken);
         return response.Value.Content[0].Text ?? string.Empty;
     }
 

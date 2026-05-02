@@ -6,16 +6,26 @@
 
   <ItemGroup>
     <PackageReference Include="Anthropic.SDK" Version="5.10.0" />
-    <PackageReference Include="Azure.AI.Inference" Version="1.0.0-beta.5" />
     <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0" />
-    <PackageReference Include="GitHub.Copilot.SDK" Version="0.1.32" />
-    <PackageReference Include="OpenAI" Version="2.1.0" />
+    <PackageReference Include="GitHub.Copilot.SDK" Version="0.3.0" />
+    <PackageReference Include="OpenAI" Version="2.10.0" />
   </ItemGroup>
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!--
+      OPENAI001: The OpenAI 2.x SDK marks the Responses client and
+      reasoning_effort properties (on both Responses and Chat Completions)
+      as [Experimental]. The features are stable in the live REST API,
+      but the .NET surface is opted-in via suppression per the SDK README.
+    -->
+    <NoWarn>$(NoWarn);OPENAI001</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Turbophrase.Providers.Tests" />
+  </ItemGroup>
 
 </Project>

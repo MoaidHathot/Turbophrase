@@ -324,6 +324,58 @@ public class ConfigEditorTests : IDisposable
     }
 
     [Fact]
+    public void SetPreset_WithReasoningEffort_PersistsAsString()
+    {
+        var editor = ConfigEditor.LoadOrCreate(_tempPath);
+        editor.SetPreset("deep", new PromptPreset
+        {
+            Name = "Deep",
+            SystemPrompt = "Think hard.",
+            ReasoningEffort = ReasoningEffort.High,
+        });
+        editor.Save();
+
+        var root = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(_tempPath))!.AsObject();
+        var preset = root["presets"]!["deep"]!.AsObject();
+        Assert.Equal("High", preset["reasoningEffort"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void SetPreset_WithoutReasoningEffort_OmitsTheKey()
+    {
+        var editor = ConfigEditor.LoadOrCreate(_tempPath);
+        editor.SetPreset("plain", new PromptPreset
+        {
+            Name = "Plain",
+            SystemPrompt = "Just do it.",
+            ReasoningEffort = null,
+        });
+        editor.Save();
+
+        var root = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(_tempPath))!.AsObject();
+        var preset = root["presets"]!["plain"]!.AsObject();
+        Assert.False(preset.ContainsKey("reasoningEffort"));
+    }
+
+    [Fact]
+    public void SetPreset_OffEffort_IsPersisted()
+    {
+        // Off is a real value, not the same as Inherit/null.
+        var editor = ConfigEditor.LoadOrCreate(_tempPath);
+        editor.SetPreset("noThink", new PromptPreset
+        {
+            Name = "No Think",
+            SystemPrompt = "Be quick.",
+            ReasoningEffort = ReasoningEffort.Off,
+        });
+        editor.Save();
+
+        var root = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(_tempPath))!.AsObject();
+        var preset = root["presets"]!["noThink"]!.AsObject();
+        Assert.Equal("Off", preset["reasoningEffort"]!.GetValue<string>());
+    }
+
+    [Fact]
     public void RenamePreset_UpdatesHotkeyReferences()
     {
         File.WriteAllText(_tempPath, """

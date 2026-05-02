@@ -1,12 +1,13 @@
-using OpenAI;
-using OpenAI.Chat;
+using OpenAI.Responses;
 using Turbophrase.Core.Abstractions;
 using Turbophrase.Core.Configuration;
 
 namespace Turbophrase.Providers;
 
 /// <summary>
-/// AI provider for OpenAI API.
+/// AI provider for OpenAI API. Uses the Responses API (the OpenAI 2.x
+/// SDK's recommended surface for gpt-5 / o-series models, and the only
+/// path with first-class reasoning support).
 /// </summary>
 public class OpenAIProvider : AIProviderBase
 {
@@ -14,31 +15,49 @@ public class OpenAIProvider : AIProviderBase
     private const int DefaultMaxTokens = 4096;
     private const float DefaultTemperature = 0.7f;
 
-    private readonly ChatClient _client;
+    private readonly ResponsesClient _client;
+    private readonly string _model;
 
     public OpenAIProvider(string name, ProviderConfig config) : base(name, config)
     {
         var apiKey = config.ApiKey ?? throw new InvalidOperationException("OpenAI API key is required");
-        var model = GetModelOrDefault(DefaultModel);
-        _client = new ChatClient(model, apiKey);
+        _model = GetModelOrDefault(DefaultModel);
+        _client = new ResponsesClient(apiKey);
     }
 
-    public override async Task<string> TransformTextAsync(string text, string systemPrompt, CancellationToken cancellationToken = default)
+    public override async Task<string> TransformTextAsync(
+        string text,
+        string systemPrompt,
+        TransformOptions? options,
+        CancellationToken cancellationToken = default)
     {
-        var messages = new List<ChatMessage>
+        var requestOptions = new CreateResponseOptions
         {
-            new SystemChatMessage(systemPrompt),
-            new UserChatMessage(text)
-        };
-
-        var options = new ChatCompletionOptions
-        {
+            Model = _model,
+            Instructions = systemPrompt,
             MaxOutputTokenCount = GetMaxTokensOrDefault(DefaultMaxTokens),
-            Temperature = GetTemperatureOrDefault(DefaultTemperature)
         };
 
-        var response = await _client.CompleteChatAsync(messages, options, cancellationToken);
-        return response.Value.Content[0].Text ?? string.Empty;
+        // Reasoning models (gpt-5, o-series) on the Responses API ignore
+        // temperature; only set it when not running with reasoning so we
+        // don't surprise users with a 400.
+        var reasoning = ReasoningEffortMapping.ToOpenAIResponses(options?.ReasoningEffort);
+        if (reasoning is not null)
+        {
+            requestOptions.ReasoningOptions = new ResponseReasoningOptions
+            {
+                ReasoningEffortLevel = reasoning,
+            };
+        }
+        else
+        {
+            requestOptions.Temperature = GetTemperatureOrDefault(DefaultTemperature);
+        }
+
+        requestOptions.InputItems.Add(ResponseItem.CreateUserMessageItem(text));
+
+        var response = await _client.CreateResponseAsync(requestOptions, cancellationToken);
+        return response.Value.GetOutputText() ?? string.Empty;
     }
 
     public override bool ValidateConfiguration()

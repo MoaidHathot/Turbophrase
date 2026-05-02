@@ -22,6 +22,23 @@ public interface IAIProvider
     Task<string> TransformTextAsync(string text, string systemPrompt, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Transforms text using the AI model, with optional per-call overrides
+    /// (reasoning effort, etc.). Providers that do not support a given
+    /// option silently ignore it.
+    /// </summary>
+    /// <param name="text">The text to transform.</param>
+    /// <param name="systemPrompt">The system prompt defining the transformation.</param>
+    /// <param name="options">Per-call options resolved from the active preset.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The transformed text.</returns>
+    Task<string> TransformTextAsync(
+        string text,
+        string systemPrompt,
+        TransformOptions? options,
+        CancellationToken cancellationToken = default)
+        => TransformTextAsync(text, systemPrompt, cancellationToken);
+
+    /// <summary>
     /// Validates that the provider is properly configured.
     /// </summary>
     /// <returns>True if configured correctly, false otherwise.</returns>
@@ -43,7 +60,22 @@ public abstract class AIProviderBase : IAIProvider
 
     public string Name { get; }
 
-    public abstract Task<string> TransformTextAsync(string text, string systemPrompt, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Default backwards-compatible overload. Forwards to the
+    /// options-aware overload with <c>null</c> options.
+    /// </summary>
+    public virtual Task<string> TransformTextAsync(string text, string systemPrompt, CancellationToken cancellationToken = default)
+        => TransformTextAsync(text, systemPrompt, options: null, cancellationToken);
+
+    /// <summary>
+    /// Options-aware transform. Concrete providers override this to honour
+    /// reasoning effort and any future per-call overrides.
+    /// </summary>
+    public abstract Task<string> TransformTextAsync(
+        string text,
+        string systemPrompt,
+        TransformOptions? options,
+        CancellationToken cancellationToken = default);
 
     public abstract bool ValidateConfiguration();
 

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Turbophrase.Core.Configuration;
 
 namespace Turbophrase.Core.Tests.Configuration;
@@ -14,6 +15,7 @@ public class PromptPresetTests
         Assert.Null(preset.Provider);
         Assert.True(preset.IncludeInPicker);
         Assert.Null(preset.PickerOrder);
+        Assert.Null(preset.ReasoningEffort);
     }
 
     [Fact]
@@ -77,5 +79,79 @@ public class PromptPresetTests
         Assert.Equal("Professional Rewrite", preset.Name);
         Assert.Contains("professional", preset.SystemPrompt.ToLower());
         Assert.Equal("openai", preset.Provider);
+    }
+
+    [Fact]
+    public void PromptPreset_CanSetReasoningEffort()
+    {
+        var preset = new PromptPreset
+        {
+            Name = "Deep think",
+            SystemPrompt = "Analyse",
+            ReasoningEffort = ReasoningEffort.High,
+        };
+
+        Assert.Equal(ReasoningEffort.High, preset.ReasoningEffort);
+    }
+
+    [Fact]
+    public void PromptPreset_ReasoningEffort_SerializesAsLowercaseString()
+    {
+        var preset = new PromptPreset
+        {
+            Name = "x",
+            SystemPrompt = "y",
+            ReasoningEffort = ReasoningEffort.Medium,
+        };
+
+        var json = JsonSerializer.Serialize(preset, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        });
+
+        // Confirm the enum is encoded as a string and field name is camelCased.
+        Assert.Contains("\"reasoningEffort\":\"Medium\"", json);
+    }
+
+    [Fact]
+    public void PromptPreset_ReasoningEffort_OmittedWhenNull()
+    {
+        var preset = new PromptPreset
+        {
+            Name = "x",
+            SystemPrompt = "y",
+            ReasoningEffort = null,
+        };
+
+        var json = JsonSerializer.Serialize(preset, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+        });
+
+        // Inherit semantics: no reasoningEffort key in the JSON.
+        Assert.DoesNotContain("reasoningEffort", json);
+    }
+
+    [Theory]
+    [InlineData("\"off\"", ReasoningEffort.Off)]
+    [InlineData("\"minimal\"", ReasoningEffort.Minimal)]
+    [InlineData("\"low\"", ReasoningEffort.Low)]
+    [InlineData("\"medium\"", ReasoningEffort.Medium)]
+    [InlineData("\"high\"", ReasoningEffort.High)]
+    [InlineData("\"xHigh\"", ReasoningEffort.XHigh)]
+    [InlineData("\"Off\"", ReasoningEffort.Off)]
+    [InlineData("\"HIGH\"", ReasoningEffort.High)]
+    public void PromptPreset_ReasoningEffort_DeserializesCaseInsensitive(string jsonValue, ReasoningEffort expected)
+    {
+        var json = $"{{\"name\":\"x\",\"systemPrompt\":\"y\",\"reasoningEffort\":{jsonValue}}}";
+        var preset = JsonSerializer.Deserialize<PromptPreset>(json, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+        });
+
+        Assert.NotNull(preset);
+        Assert.Equal(expected, preset!.ReasoningEffort);
     }
 }

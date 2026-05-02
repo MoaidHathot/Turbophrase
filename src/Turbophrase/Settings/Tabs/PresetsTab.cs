@@ -39,6 +39,7 @@ public sealed class PresetsTab : SettingsTabBase
         Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right | AnchorStyles.Bottom,
     };
     private readonly ComboBox _providerCombo = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 220 };
+    private readonly ComboBox _reasoningEffortCombo = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 220 };
     private readonly NumericUpDown _pickerOrderNumeric = new() { Minimum = 0, Maximum = 9999, Width = 80 };
     private readonly CheckBox _includeInPickerCheckBox = new() { Text = "Include in operation picker", AutoSize = true };
 
@@ -46,6 +47,23 @@ public sealed class PresetsTab : SettingsTabBase
     private string? _selectedKey;
     private bool _suppressEvents;
     private const string NoProviderOverride = "(use default provider)";
+    private const string ReasoningInheritLabel = "(use provider default)";
+
+    /// <summary>
+    /// Ordered list of choices shown in the reasoning-effort dropdown.
+    /// First entry maps to <c>null</c> (Inherit / use provider default);
+    /// the rest map 1:1 to the <see cref="ReasoningEffort"/> enum.
+    /// </summary>
+    private static readonly (string Label, ReasoningEffort? Value)[] ReasoningChoices =
+    {
+        (ReasoningInheritLabel, null),
+        ("Off", ReasoningEffort.Off),
+        ("Minimal", ReasoningEffort.Minimal),
+        ("Low", ReasoningEffort.Low),
+        ("Medium", ReasoningEffort.Medium),
+        ("High", ReasoningEffort.High),
+        ("XHigh", ReasoningEffort.XHigh),
+    };
 
     public PresetsTab()
     {
@@ -103,6 +121,13 @@ public sealed class PresetsTab : SettingsTabBase
                 ? null
                 : _providerCombo.SelectedItem as string;
         });
+        _reasoningEffortCombo.SelectedIndexChanged += (_, _) => OnFieldEdited(e =>
+        {
+            var idx = _reasoningEffortCombo.SelectedIndex;
+            e.ReasoningEffort = idx >= 0 && idx < ReasoningChoices.Length
+                ? ReasoningChoices[idx].Value
+                : null;
+        });
         _pickerOrderNumeric.ValueChanged += (_, _) => OnFieldEdited(e =>
             e.PickerOrder = (int)_pickerOrderNumeric.Value);
         _includeInPickerCheckBox.CheckedChanged += (_, _) => OnFieldEdited(e =>
@@ -147,6 +172,30 @@ public sealed class PresetsTab : SettingsTabBase
         layout.RowCount++;
 
         AddRow(layout, "Provider override", _providerCombo);
+
+        // Populate the reasoning effort dropdown once (static list).
+        if (_reasoningEffortCombo.Items.Count == 0)
+        {
+            foreach (var choice in ReasoningChoices)
+            {
+                _reasoningEffortCombo.Items.Add(choice.Label);
+            }
+        }
+        _reasoningEffortCombo.SelectedIndex = 0;
+        AddRow(layout, "Reasoning effort", _reasoningEffortCombo);
+        var reasoningHelp = new Label
+        {
+            AutoSize = true,
+            ForeColor = SystemColors.GrayText,
+            Text = "Inherit = use provider default. Off explicitly disables thinking on Anthropic/Ollama; OpenAI/Copilot clamp to lowest. XHigh maps to High on OpenAI/Azure.",
+            MaximumSize = new Size(360, 0),
+            Margin = new Padding(0, 0, 0, 4),
+        };
+        layout.Controls.Add(new Label { Width = 0, Height = 0 }, 0, layout.RowCount);
+        layout.Controls.Add(reasoningHelp, 1, layout.RowCount);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowCount++;
+
         AddRow(layout, "Picker order", _pickerOrderNumeric);
         AddRow(layout, string.Empty, _includeInPickerCheckBox);
 
@@ -178,6 +227,7 @@ public sealed class PresetsTab : SettingsTabBase
                     Provider = preset.Provider,
                     PickerOrder = preset.PickerOrder ?? 0,
                     IncludeInPicker = preset.IncludeInPicker,
+                    ReasoningEffort = preset.ReasoningEffort,
                 };
             }
 
@@ -248,6 +298,7 @@ public sealed class PresetsTab : SettingsTabBase
                 Provider = string.IsNullOrEmpty(entry.Provider) ? null : entry.Provider,
                 PickerOrder = entry.PickerOrder,
                 IncludeInPicker = entry.IncludeInPicker,
+                ReasoningEffort = entry.ReasoningEffort,
             };
             editor.SetPreset(entry.CurrentKey, preset);
         }
@@ -313,6 +364,7 @@ public sealed class PresetsTab : SettingsTabBase
                 _pickerOrderNumeric.Value = 0;
                 _includeInPickerCheckBox.Checked = false;
                 _providerCombo.SelectedItem = NoProviderOverride;
+                _reasoningEffortCombo.SelectedIndex = 0;
                 SetDetailEnabled(false);
                 return;
             }
@@ -324,6 +376,18 @@ public sealed class PresetsTab : SettingsTabBase
             _systemPromptBox.Text = entry.SystemPrompt;
             _pickerOrderNumeric.Value = Math.Max(0, Math.Min(9999, entry.PickerOrder));
             _includeInPickerCheckBox.Checked = entry.IncludeInPicker;
+
+            // Reasoning effort selection.
+            var reasoningIdx = 0;
+            for (int i = 0; i < ReasoningChoices.Length; i++)
+            {
+                if (Equals(ReasoningChoices[i].Value, entry.ReasoningEffort))
+                {
+                    reasoningIdx = i;
+                    break;
+                }
+            }
+            _reasoningEffortCombo.SelectedIndex = reasoningIdx;
 
             if (string.IsNullOrEmpty(entry.Provider))
             {
@@ -351,6 +415,7 @@ public sealed class PresetsTab : SettingsTabBase
         _nameBox.Enabled = enabled;
         _systemPromptBox.Enabled = enabled;
         _providerCombo.Enabled = enabled;
+        _reasoningEffortCombo.Enabled = enabled;
         _pickerOrderNumeric.Enabled = enabled;
         _includeInPickerCheckBox.Enabled = enabled;
     }
@@ -432,6 +497,7 @@ public sealed class PresetsTab : SettingsTabBase
             Provider = source.Provider,
             PickerOrder = source.PickerOrder,
             IncludeInPicker = source.IncludeInPicker,
+            ReasoningEffort = source.ReasoningEffort,
         };
         _entries[newKey] = entry;
         MarkDirty();
@@ -514,5 +580,6 @@ public sealed class PresetsTab : SettingsTabBase
         public string? Provider { get; set; }
         public int PickerOrder { get; set; }
         public bool IncludeInPicker { get; set; } = true;
+        public ReasoningEffort? ReasoningEffort { get; set; }
     }
 }
