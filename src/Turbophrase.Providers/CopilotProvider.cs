@@ -96,16 +96,10 @@ public class CopilotProvider(string name, Turbophrase.Core.Configuration.Provide
 
     public override bool ValidateConfiguration()
     {
-        // Check if copilot CLI is available
-        try
-        {
-            var cliPath = FindCopilotCli();
-            return !string.IsNullOrEmpty(cliPath);
-        }
-        catch
-        {
-            return false;
-        }
+        // The SDK ships with a bundled Copilot CLI, so there is nothing to discover
+        // or validate at configuration time. Auth/runtime errors surface during
+        // session creation in TransformTextAsync.
+        return true;
     }
 
     private async Task<CopilotClient> GetOrCreateClientAsync()
@@ -123,11 +117,12 @@ public class CopilotProvider(string name, Turbophrase.Core.Configuration.Provide
                 return _client;
             }
 
-            var cliPath = FindCopilotCli();
-            
+            // Do not set CliPath - the SDK uses its bundled CLI by default.
+            // Overriding CliPath previously caused failures on machines where
+            // a global copilot install was missing or where npm produced a .cmd
+            // shim that .NET's Process.Start could not launch directly.
             _client = new CopilotClient(new CopilotClientOptions
             {
-                CliPath = cliPath,
                 UseLoggedInUser = true,
                 AutoStart = true,
                 AutoRestart = true
@@ -142,58 +137,6 @@ public class CopilotProvider(string name, Turbophrase.Core.Configuration.Provide
         {
             _initLock.Release();
         }
-    }
-
-    /// <summary>
-    /// Finds the Copilot CLI executable.
-    /// </summary>
-    private static string? FindCopilotCli()
-    {
-        // Try common locations
-        var possiblePaths = new[]
-        {
-            "copilot",
-            "copilot.exe",
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "copilot-cli", "copilot.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "GitHub", "copilot-cli", "copilot.exe"),
-            // npm global install location
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "npm", "copilot.cmd"),
-        };
-
-        foreach (var path in possiblePaths)
-        {
-            if (File.Exists(path))
-            {
-                return path;
-            }
-
-            // Try to find in PATH
-            if (path == "copilot" || path == "copilot.exe")
-            {
-                var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
-                foreach (var dir in pathEnv.Split(Path.PathSeparator))
-                {
-                    var fullPath = Path.Combine(dir, path);
-                    if (File.Exists(fullPath))
-                    {
-                        return fullPath;
-                    }
-                    
-                    // Also try with .exe extension on Windows
-                    if (!path.EndsWith(".exe"))
-                    {
-                        var exePath = Path.Combine(dir, path + ".exe");
-                        if (File.Exists(exePath))
-                        {
-                            return exePath;
-                        }
-                    }
-                }
-            }
-        }
-
-        // Return "copilot" and let the SDK handle the error if not found
-        return "copilot";
     }
 
     /// <summary>
