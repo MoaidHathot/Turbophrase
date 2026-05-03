@@ -28,6 +28,32 @@
     </Content>
   </ItemGroup>
 
+  <!--
+    Restore the bundled GitHub Copilot CLI into the publish output.
+
+    The GitHub.Copilot.SDK NuGet (referenced by Turbophrase.Providers) registers
+    copilot.exe as a ContentWithTargetPath at runtimes/<rid>/native/copilot.exe.
+    During build that file IS copied to bin output, but during publish with
+    PublishSingleFile=true + IncludeNativeLibrariesForSelfExtract=true the
+    single-file bundler matches everything under runtimes/<rid>/native/ and
+    absorbs it into the bundle. As a result the loose copilot.exe disappears
+    from the publish folder, and at runtime the SDK's GetBundledCliPath()
+    returns null (it looks for AppContext.BaseDirectory + runtimes/<rid>/native/copilot.exe)
+    causing CopilotClient to throw "Copilot CLI not found at ..." on the
+    installed exe.
+
+    Restore it as a loose file by copying after the bundler has finished.
+  -->
+  <Target Name="_StageCopilotCliForPublish" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' != ''">
+    <PropertyGroup>
+      <_CopilotStagedCliPath>$(MSBuildThisFileDirectory)..\Turbophrase.Providers\bin\$(Configuration)\net10.0\runtimes\$(RuntimeIdentifier)\native\copilot.exe</_CopilotStagedCliPath>
+      <_CopilotPublishCliDir>$(PublishDir)runtimes\$(RuntimeIdentifier)\native\</_CopilotPublishCliDir>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(_CopilotStagedCliPath)')" Text="Bundled Copilot CLI not found at '$(_CopilotStagedCliPath)'. Build Turbophrase.Providers first or check GitHub.Copilot.SDK targets." />
+    <Copy SourceFiles="$(_CopilotStagedCliPath)" DestinationFolder="$(_CopilotPublishCliDir)" SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="Staged Copilot CLI to $(_CopilotPublishCliDir)copilot.exe" />
+  </Target>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
