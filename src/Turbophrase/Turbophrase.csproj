@@ -33,25 +33,70 @@
 
     The GitHub.Copilot.SDK NuGet (referenced by Turbophrase.Providers) registers
     copilot.exe as a ContentWithTargetPath at runtimes/<rid>/native/copilot.exe.
-    During build that file IS copied to bin output, but during publish with
-    PublishSingleFile=true + IncludeNativeLibrariesForSelfExtract=true the
-    single-file bundler matches everything under runtimes/<rid>/native/ and
-    absorbs it into the bundle. As a result the loose copilot.exe disappears
-    from the publish folder, and at runtime the SDK's GetBundledCliPath()
-    returns null (it looks for AppContext.BaseDirectory + runtimes/<rid>/native/copilot.exe)
-    causing CopilotClient to throw "Copilot CLI not found at ..." on the
-    installed exe.
+    Two problems combine to make it disappear from the published artifact:
 
-    Restore it as a loose file by copying after the bundler has finished.
+      1. With PublishSingleFile=true + IncludeNativeLibrariesForSelfExtract=true,
+         the bundler matches everything under runtimes/<rid>/native/ and absorbs
+         it into the bundle, so the loose copilot.exe is dropped from publish.
+      2. The SDK targets only run in the project that has the PackageReference
+         (Turbophrase.Providers). When the EXE is cross-published with an
+         explicit win-arm64 RID, the project-reference build of Providers does
+         NOT propagate the explicit RID (Providers has no <RuntimeIdentifier>),
+         so the staged binary in the EXE bin is always for the host RID
+         (typically win-x64). For win-arm64 publishes the right binary isn't
+         even on disk.
+
+    Fix: after Publish, download the matching @github/copilot-(platform) tarball
+    for the target RID directly from npm and extract copilot.exe into the
+    publish folder at runtimes/(rid)/native/copilot.exe, where the SDK's
+    GetBundledCliPath() expects to find it (AppContext.BaseDirectory + that path).
+
+    Mirror the URL/version logic used by GitHub.Copilot.SDK.targets so we keep
+    in sync with the bundled CLI version.
   -->
+  <Import Project="$(NuGetPackageRoot)github.copilot.sdk\0.1.32\build\GitHub.Copilot.SDK.props"
+          Condition="'$(CopilotCliVersion)' == '' And Exists('$(NuGetPackageRoot)github.copilot.sdk\0.1.32\build\GitHub.Copilot.SDK.props')" />
+
   <Target Name="_StageCopilotCliForPublish" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' != ''">
     <PropertyGroup>
-      <_CopilotStagedCliPath>$(MSBuildThisFileDirectory)..\Turbophrase.Providers\bin\$(Configuration)\net10.0\runtimes\$(RuntimeIdentifier)\native\copilot.exe</_CopilotStagedCliPath>
+      <_CopilotPlatform Condition="'$(RuntimeIdentifier)' == 'win-x64'">win32-x64</_CopilotPlatform>
+      <_CopilotPlatform Condition="'$(RuntimeIdentifier)' == 'win-arm64'">win32-arm64</_CopilotPlatform>
+      <_CopilotPlatform Condition="'$(RuntimeIdentifier)' == 'linux-x64'">linux-x64</_CopilotPlatform>
+      <_CopilotPlatform Condition="'$(RuntimeIdentifier)' == 'linux-arm64'">linux-arm64</_CopilotPlatform>
+      <_CopilotPlatform Condition="'$(RuntimeIdentifier)' == 'osx-x64'">darwin-x64</_CopilotPlatform>
+      <_CopilotPlatform Condition="'$(RuntimeIdentifier)' == 'osx-arm64'">darwin-arm64</_CopilotPlatform>
+      <_CopilotBinary Condition="$(RuntimeIdentifier.StartsWith('win-'))">copilot.exe</_CopilotBinary>
+      <_CopilotBinary Condition="'$(_CopilotBinary)' == ''">copilot</_CopilotBinary>
+      <_CopilotCacheDir>$(IntermediateOutputPath)copilot-cli\$(CopilotCliVersion)\$(_CopilotPlatform)</_CopilotCacheDir>
+      <_CopilotCachedBinary>$(_CopilotCacheDir)\$(_CopilotBinary)</_CopilotCachedBinary>
+      <_CopilotArchivePath>$(_CopilotCacheDir)\copilot.tgz</_CopilotArchivePath>
+      <_CopilotDownloadUrl>https://registry.npmjs.org/@github/copilot-$(_CopilotPlatform)/-/copilot-$(_CopilotPlatform)-$(CopilotCliVersion).tgz</_CopilotDownloadUrl>
       <_CopilotPublishCliDir>$(PublishDir)runtimes\$(RuntimeIdentifier)\native\</_CopilotPublishCliDir>
+      <_TarCommand Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(SystemRoot)\System32\tar.exe</_TarCommand>
+      <_TarCommand Condition="'$(_TarCommand)' == ''">tar</_TarCommand>
     </PropertyGroup>
-    <Error Condition="!Exists('$(_CopilotStagedCliPath)')" Text="Bundled Copilot CLI not found at '$(_CopilotStagedCliPath)'. Build Turbophrase.Providers first or check GitHub.Copilot.SDK targets." />
-    <Copy SourceFiles="$(_CopilotStagedCliPath)" DestinationFolder="$(_CopilotPublishCliDir)" SkipUnchangedFiles="true" />
-    <Message Importance="high" Text="Staged Copilot CLI to $(_CopilotPublishCliDir)copilot.exe" />
+
+    <Error Condition="'$(CopilotCliVersion)' == ''" Text="CopilotCliVersion is not set; cannot stage Copilot CLI. Make sure GitHub.Copilot.SDK is restored." />
+    <Error Condition="'$(_CopilotPlatform)' == ''" Text="Unsupported RuntimeIdentifier '$(RuntimeIdentifier)' for Copilot CLI staging." />
+
+    <!-- Delete stale archive if extraction is incomplete -->
+    <Delete Files="$(_CopilotArchivePath)" Condition="!Exists('$(_CopilotCachedBinary)') And Exists('$(_CopilotArchivePath)')" />
+
+    <MakeDir Directories="$(_CopilotCacheDir)" Condition="!Exists('$(_CopilotCachedBinary)')" />
+    <Message Importance="high" Text="Downloading Copilot CLI $(CopilotCliVersion) for $(_CopilotPlatform)..." Condition="!Exists('$(_CopilotCachedBinary)')" />
+    <DownloadFile SourceUrl="$(_CopilotDownloadUrl)"
+                  DestinationFolder="$(_CopilotCacheDir)"
+                  DestinationFileName="copilot.tgz"
+                  Timeout="600000"
+                  Condition="!Exists('$(_CopilotCachedBinary)')" />
+    <Exec Command="&quot;$(_TarCommand)&quot; -xzf &quot;$(_CopilotArchivePath)&quot; --strip-components=1 -C &quot;$(_CopilotCacheDir)&quot;"
+          Condition="!Exists('$(_CopilotCachedBinary)')" />
+
+    <Error Condition="!Exists('$(_CopilotCachedBinary)')" Text="Failed to extract Copilot CLI binary to $(_CopilotCachedBinary)" />
+
+    <MakeDir Directories="$(_CopilotPublishCliDir)" />
+    <Copy SourceFiles="$(_CopilotCachedBinary)" DestinationFolder="$(_CopilotPublishCliDir)" SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="Staged Copilot CLI to $(_CopilotPublishCliDir)$(_CopilotBinary)" />
   </Target>
 
   <PropertyGroup>
