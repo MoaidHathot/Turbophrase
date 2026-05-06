@@ -53,6 +53,24 @@ public static class ProviderFactory
         return providers;
     }
 
+    public static ProviderConfig? GetProviderConfig(TurbophraseConfig config, string providerName)
+    {
+        if (config.Providers.TryGetValue(providerName, out var providerConfig))
+        {
+            return providerConfig;
+        }
+
+        foreach (var (_, value) in config.Providers)
+        {
+            if (string.Equals(value.Type, providerName, StringComparison.OrdinalIgnoreCase))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>
     /// Gets the provider to use for a given preset.
     /// </summary>
@@ -70,6 +88,19 @@ public static class ProviderFactory
         if (providers.TryGetValue(providerName, out var provider))
         {
             return provider;
+        }
+
+        var providerConfig = GetProviderConfig(config, providerName);
+        if (providerConfig != null)
+        {
+            try
+            {
+                return CreateProvider(providerName, providerConfig);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Provider '{providerName}' failed to initialize: {ex.Message}", ex);
+            }
         }
 
         throw new InvalidOperationException($"Provider '{providerName}' is not configured or failed to initialize.");

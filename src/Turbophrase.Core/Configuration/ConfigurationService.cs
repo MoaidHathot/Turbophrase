@@ -398,9 +398,14 @@ public partial class ConfigurationService
         return EnvVarPattern().Replace(value, match =>
         {
             var envVarName = match.Groups[1].Value;
-            return Environment.GetEnvironmentVariable(envVarName) ?? match.Value;
+            return GetEnvironmentVariable(envVarName) ?? match.Value;
         });
     }
+
+    private static string? GetEnvironmentVariable(string name) =>
+        Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.Process)
+        ?? Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.User)
+        ?? Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.Machine);
 
     private static string? ResolveEnvironmentVariable(string? value) => ResolveSecretReference(value);
 

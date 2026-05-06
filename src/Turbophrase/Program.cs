@@ -1,4 +1,6 @@
 using Turbophrase;
+using Turbophrase.Avalonia;
+using Turbophrase.Avalonia.Windows;
 using Turbophrase.Core.Configuration;
 using Turbophrase.Services;
 using System.Reflection;
@@ -419,11 +421,9 @@ static class Program
         // Launches the Settings UI as a one-shot foreground window. Useful when
         // the tray app isn't running (e.g., from a fresh terminal). When the
         // tray IS running, users typically open Settings from the tray menu.
-        ApplicationConfiguration.Initialize();
         try
         {
-            using var form = new Turbophrase.Settings.SettingsForm();
-            Application.Run(form);
+            AvaloniaUiHost.ShowStandaloneWindowAsync(() => new SettingsWindow()).GetAwaiter().GetResult();
             return 0;
         }
         catch (Exception ex)

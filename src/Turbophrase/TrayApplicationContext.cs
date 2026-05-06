@@ -1,6 +1,8 @@
 using System.Reflection;
 using Turbophrase.Core.Abstractions;
 using Turbophrase.Core.Configuration;
+using Turbophrase.Avalonia;
+using Turbophrase.Avalonia.Windows;
 using Turbophrase.Services;
 using Turbophrase.Settings;
 
@@ -23,7 +25,7 @@ public class TrayApplicationContext : ApplicationContext
     private readonly ProcessingOverlay _processingOverlay;
     private readonly SynchronizationContext _uiContext;
     private readonly int _uiThreadId;
-    private SettingsForm? _settingsForm;
+    private SettingsWindow? _settingsWindow;
 
     public TrayApplicationContext()
     {
@@ -200,21 +202,19 @@ public class TrayApplicationContext : ApplicationContext
     /// </summary>
     public void OpenSettingsWindow()
     {
-        if (_settingsForm != null && !_settingsForm.IsDisposed)
+        AvaloniaUiHost.Invoke(() =>
         {
-            if (_settingsForm.WindowState == FormWindowState.Minimized)
+            if (_settingsWindow != null && _settingsWindow.IsVisible)
             {
-                _settingsForm.WindowState = FormWindowState.Normal;
+                _settingsWindow.Activate();
+                return;
             }
 
-            _settingsForm.Activate();
-            _settingsForm.BringToFront();
-            return;
-        }
-
-        _settingsForm = new SettingsForm();
-        _settingsForm.FormClosed += (_, _) => _settingsForm = null;
-        _settingsForm.Show();
+            _settingsWindow = new SettingsWindow();
+            _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+            _settingsWindow.Show();
+            _settingsWindow.Activate();
+        });
     }
 
     private void ChangeDefaultProvider(string providerName)
@@ -477,20 +477,26 @@ public class TrayApplicationContext : ApplicationContext
     private async Task ExecutePresetPickerAsync(HotkeyBinding binding)
     {
         var sourceWindowHandle = _orchestrator.GetActiveWindowHandle();
-        using var dialog = new PresetPickerDialog(GetPickerOperations());
-        dialog.SetCapturePending();
-        var captureCompletion = new TaskCompletionSource<SelectionCaptureResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        CommandPaletteWindow? dialog = null;
 
-        dialog.Shown += async (_, _) =>
+        AvaloniaUiHost.Invoke(() =>
         {
-            var captureResult = await CaptureForCommandSurfaceAsync(sourceWindowHandle, dialog);
-            captureCompletion.TrySetResult(captureResult);
-
-            if (dialog.IsDisposed)
+            dialog = new CommandPaletteWindow(GetPickerOperations())
             {
-                return;
-            }
+                ShowActivated = false
+            };
+            dialog.SetCapturePending();
+        });
 
+        if (dialog == null)
+        {
+            return;
+        }
+
+        var captureResult = await CaptureForCommandSurfaceAsync(sourceWindowHandle);
+
+        AvaloniaUiHost.Invoke(() =>
+        {
             if (captureResult.Success)
             {
                 dialog.SetCaptureReady();
@@ -501,21 +507,24 @@ public class TrayApplicationContext : ApplicationContext
             }
 
             dialog.ActivateForInput();
-        };
+        });
 
-        if (dialog.ShowDialog() != DialogResult.OK || dialog.SelectedOperation == null)
+        var windowClosed = AvaloniaUiHost.ShowWindowAsync(dialog);
+        await windowClosed;
+
+        var selectedOperation = dialog?.AcceptedOperation;
+        if (dialog?.Accepted != true || selectedOperation == null)
         {
             return;
         }
 
-        var captureResult = await captureCompletion.Task;
         if (!captureResult.Success)
         {
             ShowTransformResult(TransformResult.Fail(captureResult.ErrorMessage ?? "No text is selected."), GetBindingDisplayName(binding));
             return;
         }
 
-        await ExecutePickedOperationAsync(dialog.SelectedOperation, captureResult);
+        await ExecutePickedOperationAsync(selectedOperation, captureResult);
     }
 
     private async Task ExecutePickedOperationAsync(PickerOperation operation, SelectionCaptureResult captureResult)
@@ -541,20 +550,26 @@ public class TrayApplicationContext : ApplicationContext
     private async Task ExecuteCustomPromptAsync(HotkeyBinding? binding = null)
     {
         var sourceWindowHandle = _orchestrator.GetActiveWindowHandle();
-        using var dialog = new CustomPromptDialog(_orchestrator.AvailableProviders, _config.DefaultProvider);
-        dialog.SetCapturePending();
-        var captureCompletion = new TaskCompletionSource<SelectionCaptureResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        PromptCommandWindow? dialog = null;
 
-        dialog.Shown += async (_, _) =>
+        AvaloniaUiHost.Invoke(() =>
         {
-            var captureResult = await CaptureForCommandSurfaceAsync(sourceWindowHandle, dialog);
-            captureCompletion.TrySetResult(captureResult);
-
-            if (dialog.IsDisposed)
+            dialog = new PromptCommandWindow(_orchestrator.AvailableProviders, _config.DefaultProvider)
             {
-                return;
-            }
+                ShowActivated = false
+            };
+            dialog.SetCapturePending();
+        });
 
+        if (dialog == null)
+        {
+            return;
+        }
+
+        var captureResult = await CaptureForCommandSurfaceAsync(sourceWindowHandle);
+
+        AvaloniaUiHost.Invoke(() =>
+        {
             if (captureResult.Success)
             {
                 dialog.SetCaptureReady();
@@ -565,46 +580,64 @@ public class TrayApplicationContext : ApplicationContext
             }
 
             dialog.ActivateForInput();
-        };
+        });
 
-        if (dialog.ShowDialog() != DialogResult.OK)
+        var windowClosed = AvaloniaUiHost.ShowWindowAsync(dialog);
+        await windowClosed;
+
+        if (dialog?.Accepted != true)
         {
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(dialog.PromptText))
+        var promptText = dialog.PromptText;
+        var selectedProvider = dialog.SelectedProvider;
+        if (string.IsNullOrWhiteSpace(promptText))
         {
             ShowTransformResult(TransformResult.Fail("Prompt cannot be empty."), GetBindingDisplayName(binding));
             return;
         }
 
-        var captureResult = await captureCompletion.Task;
         if (!captureResult.Success)
         {
             ShowTransformResult(TransformResult.Fail(captureResult.ErrorMessage ?? "No text is selected."), GetBindingDisplayName(binding));
             return;
         }
 
-        await ExecuteCustomPromptAsync(binding, captureResult, dialog.PromptText, dialog.SelectedProvider);
+        await ExecuteCustomPromptAsync(binding, captureResult, promptText, selectedProvider);
     }
 
     private async Task ExecuteCustomPromptAsync(HotkeyBinding? binding, SelectionCaptureResult captureResult)
     {
-        using var dialog = new CustomPromptDialog(_orchestrator.AvailableProviders, _config.DefaultProvider);
-        dialog.SetCaptureReady();
+        PromptCommandWindow? dialog = null;
+        AvaloniaUiHost.Invoke(() =>
+        {
+            dialog = new PromptCommandWindow(_orchestrator.AvailableProviders, _config.DefaultProvider);
+            dialog.SetCaptureReady();
+            dialog.ActivateForInput();
+        });
 
-        if (dialog.ShowDialog() != DialogResult.OK)
+        if (dialog == null)
         {
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(dialog.PromptText))
+        await AvaloniaUiHost.ShowWindowAsync(dialog);
+
+        if (dialog?.Accepted != true)
+        {
+            return;
+        }
+
+        var promptText = dialog.PromptText;
+        var selectedProvider = dialog.SelectedProvider;
+        if (string.IsNullOrWhiteSpace(promptText))
         {
             ShowTransformResult(TransformResult.Fail("Prompt cannot be empty."), GetBindingDisplayName(binding));
             return;
         }
 
-        await ExecuteCustomPromptAsync(binding, captureResult, dialog.PromptText, dialog.SelectedProvider);
+        await ExecuteCustomPromptAsync(binding, captureResult, promptText, selectedProvider);
     }
 
     private async Task ExecuteCustomPromptAsync(HotkeyBinding? binding, SelectionCaptureResult captureResult, string promptText, string? selectedProvider)
@@ -623,7 +656,7 @@ public class TrayApplicationContext : ApplicationContext
             GetBindingDisplayName(binding));
     }
 
-    private async Task<SelectionCaptureResult> CaptureForCommandSurfaceAsync(IntPtr sourceWindowHandle, Form dialog)
+    private async Task<SelectionCaptureResult> CaptureForCommandSurfaceAsync(IntPtr sourceWindowHandle)
     {
         try
         {
@@ -847,11 +880,13 @@ public class TrayApplicationContext : ApplicationContext
     {
         if (disposing)
         {
-            if (_settingsForm != null && !_settingsForm.IsDisposed)
+            if (_settingsWindow != null)
             {
-                _settingsForm.Close();
-                _settingsForm.Dispose();
-                _settingsForm = null;
+                AvaloniaUiHost.Invoke(() =>
+                {
+                    _settingsWindow.Close();
+                    _settingsWindow = null;
+                });
             }
             _processingOverlay.Dispose();
             _iconAnimator.Dispose();

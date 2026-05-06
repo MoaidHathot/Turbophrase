@@ -58,7 +58,8 @@ public static class ProviderTester
                 return new Result
                 {
                     Success = false,
-                    ErrorMessage = $"Provider '{providerName}' is not properly configured. Check the API key and required fields.",
+                    ErrorMessage = provider.GetConfigurationError()
+                        ?? $"Provider '{providerName}' is not properly configured. Check the API key and required fields.",
                     Elapsed = stopwatch.Elapsed,
                 };
             }

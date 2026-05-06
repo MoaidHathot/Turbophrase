@@ -57,7 +57,7 @@ public class TextTransformOrchestrator
         {
             RuntimeLog.Write($"selection-capture-restore-focus hwnd=0x{sourceWindowHandle.ToInt64():X}");
             _clipboardService.RestoreWindowFocus(sourceWindowHandle);
-            await Task.Delay(50);
+            await Task.Delay(120);
         }
 
         var selectedText = await _clipboardService.GetSelectedTextAsync();
@@ -151,12 +151,25 @@ public class TextTransformOrchestrator
     {
         if (!_providers.TryGetValue(providerName, out var provider))
         {
-            return TransformResult.Fail($"Provider '{providerName}' not found.");
+            var providerConfig = ProviderFactory.GetProviderConfig(_config, providerName);
+            if (providerConfig == null)
+            {
+                return TransformResult.Fail($"Provider '{providerName}' not found.");
+            }
+
+            try
+            {
+                provider = ProviderFactory.CreateProvider(providerName, providerConfig);
+            }
+            catch (Exception ex)
+            {
+                return TransformResult.Fail($"Provider '{providerName}' failed to initialize: {ex.Message}");
+            }
         }
 
         if (!provider.ValidateConfiguration())
         {
-            return TransformResult.Fail($"Provider '{providerName}' is not properly configured.");
+            return TransformResult.Fail(provider.GetConfigurationError() ?? $"Provider '{providerName}' is not properly configured.");
         }
 
         try
@@ -289,8 +302,9 @@ public class TextTransformOrchestrator
 
             if (!provider.ValidateConfiguration())
             {
-                RuntimeLog.Write($"provider-invalid provider='{provider.Name}'");
-                return TransformResult.Fail($"Provider '{provider.Name}' is not properly configured.");
+                var configurationError = provider.GetConfigurationError() ?? $"Provider '{provider.Name}' is not properly configured.";
+                RuntimeLog.Write($"provider-invalid provider='{provider.Name}' error='{configurationError}'");
+                return TransformResult.Fail(configurationError);
             }
 
             RuntimeLog.Write($"provider-transform-start provider='{provider.Name}' textLength={selectedText.Length} restoreFocus={restoreFocusBeforePaste}");

@@ -26,6 +26,13 @@ public interface IAIProvider
     /// </summary>
     /// <returns>True if configured correctly, false otherwise.</returns>
     bool ValidateConfiguration();
+
+    /// <summary>
+    /// Returns a human-readable configuration error, or null when configured.
+    /// </summary>
+    string? GetConfigurationError() => ValidateConfiguration()
+        ? null
+        : $"Provider '{Name}' is not properly configured.";
 }
 
 /// <summary>
@@ -46,6 +53,8 @@ public abstract class AIProviderBase : IAIProvider
     public abstract Task<string> TransformTextAsync(string text, string systemPrompt, CancellationToken cancellationToken = default);
 
     public abstract bool ValidateConfiguration();
+
+    public virtual string? GetConfigurationError() => ((IAIProvider)this).GetConfigurationError();
 
     /// <summary>
     /// Gets the model name from config or returns the default.

@@ -8,6 +8,26 @@ namespace Turbophrase.Services;
 /// </summary>
 public class ClipboardService
 {
+    private const uint INPUT_KEYBOARD = 1;
+    private const uint KEYEVENTF_KEYUP = 0x02;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct INPUT
+    {
+        public uint type;
+        public KEYBDINPUT ki;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct KEYBDINPUT
+    {
+        public ushort wVk;
+        public ushort wScan;
+        public uint dwFlags;
+        public uint time;
+        public UIntPtr dwExtraInfo;
+    }
+
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
 
@@ -22,13 +42,17 @@ public class ClipboardService
     [DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int vKey);
 
-    private const byte VK_CONTROL = 0x11;
-    private const byte VK_SHIFT = 0x10;
-    private const byte VK_MENU = 0x12; // Alt key
-    private const byte VK_C = 0x43;
-    private const byte VK_INSERT = 0x2D;
-    private const byte VK_V = 0x56;
-    private const uint KEYEVENTF_KEYUP = 0x02;
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+    private const ushort VK_CONTROL = 0x11;
+    private const ushort VK_SHIFT = 0x10;
+    private const ushort VK_MENU = 0x12; // Alt key
+    private const ushort VK_LWIN = 0x5B;
+    private const ushort VK_RWIN = 0x5C;
+    private const ushort VK_C = 0x43;
+    private const ushort VK_INSERT = 0x2D;
+    private const ushort VK_V = 0x56;
 
     /// <summary>
     /// Gets the current foreground window handle.
@@ -59,7 +83,7 @@ public class ClipboardService
         ReleaseModifierKeys();
 
         // Small delay to ensure modifiers are released
-        await Task.Delay(50);
+        await WaitForModifiersReleasedAsync();
 
         foreach (var copyAttempt in GetCopyAttempts())
         {
@@ -107,7 +131,7 @@ public class ClipboardService
         ReleaseModifierKeys();
 
         // Small delay
-        await Task.Delay(50);
+        await WaitForModifiersReleasedAsync();
 
         // Simulate Ctrl+V
         SimulatePaste();
@@ -122,9 +146,46 @@ public class ClipboardService
     private static void ReleaseModifierKeys()
     {
         // Release Ctrl, Shift, Alt if they're pressed
-        keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
-        keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
-        keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+        SendKeyUp(VK_CONTROL);
+        SendKeyUp(VK_SHIFT);
+        SendKeyUp(VK_MENU);
+        SendKeyUp(VK_LWIN);
+        SendKeyUp(VK_RWIN);
+    }
+
+    private static async Task WaitForModifiersReleasedAsync()
+    {
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            if (!IsPressed(VK_CONTROL) && !IsPressed(VK_SHIFT) && !IsPressed(VK_MENU)
+                && !IsPressed(VK_LWIN) && !IsPressed(VK_RWIN))
+            {
+                await Task.Delay(30);
+                return;
+            }
+
+            ReleaseModifierKeys();
+            await Task.Delay(30);
+        }
+
+        await Task.Delay(80);
+    }
+
+    private static bool IsPressed(ushort virtualKey) => (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+
+    private static void SendKeyUp(ushort virtualKey)
+    {
+        var input = new INPUT
+        {
+            type = INPUT_KEYBOARD,
+            ki = new KEYBDINPUT
+            {
+                wVk = virtualKey,
+                dwFlags = KEYEVENTF_KEYUP,
+            }
+        };
+
+        SendInput(1, [input], Marshal.SizeOf<INPUT>());
     }
 
     /// <summary>
@@ -236,17 +297,17 @@ public class ClipboardService
 
     private static void SimulateCopyWithCtrlShiftC()
     {
-        keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);
+        keybd_event((byte)VK_CONTROL, 0, 0, UIntPtr.Zero);
         Thread.Sleep(10);
-        keybd_event(VK_SHIFT, 0, 0, UIntPtr.Zero);
+        keybd_event((byte)VK_SHIFT, 0, 0, UIntPtr.Zero);
         Thread.Sleep(10);
-        keybd_event(VK_C, 0, 0, UIntPtr.Zero);
+        keybd_event((byte)VK_C, 0, 0, UIntPtr.Zero);
         Thread.Sleep(10);
-        keybd_event(VK_C, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+        keybd_event((byte)VK_C, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
         Thread.Sleep(10);
-        keybd_event(VK_SHIFT, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+        keybd_event((byte)VK_SHIFT, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
         Thread.Sleep(10);
-        keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+        keybd_event((byte)VK_CONTROL, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
     }
 
     /// <summary>
@@ -257,15 +318,15 @@ public class ClipboardService
         SendModifiedKey(VK_CONTROL, VK_V);
     }
 
-    private static void SendModifiedKey(byte modifier, byte key)
+    private static void SendModifiedKey(ushort modifier, ushort key)
     {
-        keybd_event(modifier, 0, 0, UIntPtr.Zero);
+        keybd_event((byte)modifier, 0, 0, UIntPtr.Zero);
         Thread.Sleep(10);
-        keybd_event(key, 0, 0, UIntPtr.Zero);
+        keybd_event((byte)key, 0, 0, UIntPtr.Zero);
         Thread.Sleep(10);
-        keybd_event(key, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+        keybd_event((byte)key, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
         Thread.Sleep(10);
-        keybd_event(modifier, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+        keybd_event((byte)modifier, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
     }
 
     private static IEnumerable<(string Name, Action Action)> GetCopyAttempts()
