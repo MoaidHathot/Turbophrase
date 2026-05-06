@@ -262,7 +262,9 @@ public partial class ConfigurationService
                 { "keys": "Ctrl+Shift+G", "preset": "grammar" },
                 { "keys": "Ctrl+Shift+P", "preset": "paraphrase" },
                 { "keys": "Ctrl+Shift+F", "preset": "formal" },
-                { "keys": "Ctrl+Shift+C", "preset": "casual" }
+                { "keys": "Ctrl+Shift+C", "preset": "casual" },
+                { "keys": "Ctrl+Shift+Space", "action": "custom-prompt", "name": "Custom Prompt" },
+                { "keys": "Ctrl+Shift+O", "action": "preset-picker", "name": "Choose Operation" }
               ],
               "pickerActions": [],
               "presets": {
@@ -352,7 +354,9 @@ public partial class ConfigurationService
             new HotkeyBinding { Keys = "Ctrl+Shift+G", Preset = "grammar" },
             new HotkeyBinding { Keys = "Ctrl+Shift+P", Preset = "paraphrase" },
             new HotkeyBinding { Keys = "Ctrl+Shift+F", Preset = "formal" },
-            new HotkeyBinding { Keys = "Ctrl+Shift+C", Preset = "casual" }
+            new HotkeyBinding { Keys = "Ctrl+Shift+C", Preset = "casual" },
+            new HotkeyBinding { Keys = "Ctrl+Shift+Space", Action = "custom-prompt", Name = "Custom Prompt" },
+            new HotkeyBinding { Keys = "Ctrl+Shift+O", Action = "preset-picker", Name = "Choose Operation" }
         ];
     }
 

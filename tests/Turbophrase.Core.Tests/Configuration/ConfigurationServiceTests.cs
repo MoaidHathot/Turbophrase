@@ -266,11 +266,13 @@ public class ConfigurationServiceTests
             var config = ConfigurationService.LoadConfiguration();
 
             Assert.NotNull(config);
-            Assert.Equal(4, config.Hotkeys.Count);
+            Assert.Equal(6, config.Hotkeys.Count);
             Assert.Contains(config.Hotkeys, h => h.Keys == "Ctrl+Shift+G" && h.Preset == "grammar");
             Assert.Contains(config.Hotkeys, h => h.Keys == "Ctrl+Shift+P" && h.Preset == "paraphrase");
             Assert.Contains(config.Hotkeys, h => h.Keys == "Ctrl+Shift+F" && h.Preset == "formal");
             Assert.Contains(config.Hotkeys, h => h.Keys == "Ctrl+Shift+C" && h.Preset == "casual");
+            Assert.Contains(config.Hotkeys, h => h.Keys == "Ctrl+Shift+Space" && h.Action == "custom-prompt");
+            Assert.Contains(config.Hotkeys, h => h.Keys == "Ctrl+Shift+O" && h.Action == "preset-picker");
         }
         finally
         {
