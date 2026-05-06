@@ -68,6 +68,7 @@ public class TrayApplicationContext : ApplicationContext
             _orchestrator = new TextTransformOrchestrator(_config);
             _messageFilter = new HotkeyMessageFilter(this);
             Application.AddMessageFilter(_messageFilter);
+            _ = Task.Run(AvaloniaUiHost.EnsureInitialized);
 
             // Create tray icon with context menu
             _trayIcon = new NotifyIcon
@@ -477,23 +478,19 @@ public class TrayApplicationContext : ApplicationContext
     private async Task ExecutePresetPickerAsync(HotkeyBinding binding)
     {
         var sourceWindowHandle = _orchestrator.GetActiveWindowHandle();
-        CommandPaletteWindow? dialog = null;
-
-        AvaloniaUiHost.Invoke(() =>
+        var dialogTask = AvaloniaUiHost.InvokeAsync(() =>
         {
-            dialog = new CommandPaletteWindow(GetPickerOperations())
+            var created = new CommandPaletteWindow(GetPickerOperations())
             {
                 ShowActivated = false
             };
-            dialog.SetCapturePending();
+            created.SetCapturePending();
+            return created;
         });
 
-        if (dialog == null)
-        {
-            return;
-        }
-
-        var captureResult = await CaptureForCommandSurfaceAsync(sourceWindowHandle);
+        var captureTask = CaptureForCommandSurfaceAsync(sourceWindowHandle);
+        var dialog = await dialogTask;
+        var captureResult = await captureTask;
 
         AvaloniaUiHost.Invoke(() =>
         {
@@ -550,23 +547,19 @@ public class TrayApplicationContext : ApplicationContext
     private async Task ExecuteCustomPromptAsync(HotkeyBinding? binding = null)
     {
         var sourceWindowHandle = _orchestrator.GetActiveWindowHandle();
-        PromptCommandWindow? dialog = null;
-
-        AvaloniaUiHost.Invoke(() =>
+        var dialogTask = AvaloniaUiHost.InvokeAsync(() =>
         {
-            dialog = new PromptCommandWindow(_orchestrator.AvailableProviders, _config.DefaultProvider)
+            var created = new PromptCommandWindow(_orchestrator.AvailableProviders, _config.DefaultProvider)
             {
                 ShowActivated = false
             };
-            dialog.SetCapturePending();
+            created.SetCapturePending();
+            return created;
         });
 
-        if (dialog == null)
-        {
-            return;
-        }
-
-        var captureResult = await CaptureForCommandSurfaceAsync(sourceWindowHandle);
+        var captureTask = CaptureForCommandSurfaceAsync(sourceWindowHandle);
+        var dialog = await dialogTask;
+        var captureResult = await captureTask;
 
         AvaloniaUiHost.Invoke(() =>
         {

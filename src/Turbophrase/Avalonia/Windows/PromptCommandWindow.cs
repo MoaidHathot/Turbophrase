@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -20,12 +21,15 @@ public sealed class PromptCommandWindow : Window
 {
     private readonly ATextBox _promptBox;
     private readonly AComboBox _providerBox;
+    private readonly List<string> _providers;
     private readonly TextBlock _statusText;
     private readonly AButton _runButton;
     private bool _activateWhenOpened;
 
     public PromptCommandWindow(IEnumerable<string> providers, string defaultProvider)
     {
+        _providers = providers.OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList();
+
         Title = "Custom Prompt";
         Width = 700;
         SizeToContent = SizeToContent.Height;
@@ -52,7 +56,7 @@ public sealed class PromptCommandWindow : Window
         _providerBox = new AComboBox
         {
             MinWidth = 220,
-            ItemsSource = providers.OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList()
+            ItemsSource = _providers
         };
         _providerBox.SelectedItem = _providerBox.Items.Cast<string?>().FirstOrDefault(item => item == defaultProvider)
             ?? _providerBox.Items.Cast<string?>().FirstOrDefault();
@@ -82,6 +86,7 @@ public sealed class PromptCommandWindow : Window
             }
         };
         KeyDown += OnKeyDown;
+        AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
     }
 
     public string PromptText { get; private set; } = string.Empty;
@@ -99,7 +104,7 @@ public sealed class PromptCommandWindow : Window
     public void SetCaptureReady()
     {
         _statusText.Foreground = Brush("TpMutedTextBrush");
-        _statusText.Text = "Ctrl+Enter runs. Esc cancels.";
+        _statusText.Text = "Ctrl+Enter runs. Ctrl+Up/Down changes provider. Alt+1-9 jumps provider. Esc cancels.";
     }
 
     public void SetCaptureFailed(string message)
@@ -195,6 +200,26 @@ public sealed class PromptCommandWindow : Window
 
     private void OnKeyDown(object? sender, AKeyEventArgs e)
     {
+        HandleShortcut(e);
+    }
+
+    private void OnPromptBoxKeyDown(object? sender, AKeyEventArgs e)
+    {
+        HandleShortcut(e);
+    }
+
+    private void OnPreviewKeyDown(object? sender, AKeyEventArgs e)
+    {
+        HandleShortcut(e);
+    }
+
+    private void HandleShortcut(AKeyEventArgs e)
+    {
+        if (e.Handled)
+        {
+            return;
+        }
+
         if (e.Key == Key.Escape)
         {
             Cancel();
@@ -206,17 +231,61 @@ public sealed class PromptCommandWindow : Window
         {
             Submit();
             e.Handled = true;
+            return;
         }
-    }
 
-    private void OnPromptBoxKeyDown(object? sender, AKeyEventArgs e)
-    {
-        if (e.Key == Key.Enter && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Key is Key.Up or Key.Down)
         {
-            Submit();
+            MoveProvider(e.Key == Key.Up ? -1 : 1);
+            e.Handled = true;
+            return;
+        }
+
+        var providerNumber = GetProviderNumber(e.Key);
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Alt) && providerNumber > 0)
+        {
+            SelectProvider(providerNumber - 1);
             e.Handled = true;
         }
     }
+
+    private void MoveProvider(int delta)
+    {
+        if (_providers.Count == 0)
+        {
+            return;
+        }
+
+        var current = _providers.IndexOf(_providerBox.SelectedItem as string ?? string.Empty);
+        if (current < 0)
+        {
+            current = 0;
+        }
+
+        SelectProvider((current + delta + _providers.Count) % _providers.Count);
+    }
+
+    private void SelectProvider(int index)
+    {
+        if (index >= 0 && index < _providers.Count)
+        {
+            _providerBox.SelectedItem = _providers[index];
+        }
+    }
+
+    private static int GetProviderNumber(Key key) => key switch
+    {
+        Key.D1 or Key.NumPad1 => 1,
+        Key.D2 or Key.NumPad2 => 2,
+        Key.D3 or Key.NumPad3 => 3,
+        Key.D4 or Key.NumPad4 => 4,
+        Key.D5 or Key.NumPad5 => 5,
+        Key.D6 or Key.NumPad6 => 6,
+        Key.D7 or Key.NumPad7 => 7,
+        Key.D8 or Key.NumPad8 => 8,
+        Key.D9 or Key.NumPad9 => 9,
+        _ => 0,
+    };
 
     private void Submit()
     {

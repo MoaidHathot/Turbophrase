@@ -80,6 +80,31 @@ public static class AvaloniaUiHost
         Dispatcher.UIThread.Invoke(action);
     }
 
+    public static Task<T> InvokeAsync<T>(Func<T> action)
+    {
+        EnsureInitialized();
+
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            return Task.FromResult(action());
+        }
+
+        var completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Dispatcher.UIThread.Post(() =>
+        {
+            try
+            {
+                completion.TrySetResult(action());
+            }
+            catch (Exception ex)
+            {
+                completion.TrySetException(ex);
+            }
+        });
+
+        return completion.Task;
+    }
+
     public static Task ShowWindowAsync(AWindow window)
     {
         EnsureInitialized();
