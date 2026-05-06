@@ -1,25 +1,36 @@
 # Turbophrase
 
-AI-powered text transformation tool for Windows. Select text, press a hotkey, and get AI-enhanced results instantly.
+AI text transformation for Windows. Select text anywhere, press a hotkey, and Turbophrase rewrites it in place using your AI provider.
 
-## Features
+## Highlights
 
-- **System tray application** - Runs quietly in the background
-- **Global hotkeys** - Transform text from any application
-- **Multiple AI providers** - OpenAI, Azure OpenAI, Anthropic, Ollama, GitHub Copilot
-- **Custom prompts** - Define your own text transformations
-- **Runtime provider switching** - Change providers from the tray menu
+- **Works from any app**: Notepad, browsers, editors, chat apps, email clients, and more.
+- **Fast operation picker**: Press one shortcut, type a few letters, choose the transformation, and continue writing.
+- **Custom prompt window**: Capture selected text, type one-off instructions, choose a provider, and run without editing config.
+- **Modern settings UI**: Configure providers, presets, hotkeys, picker entries, notifications, startup, and diagnostics visually.
+- **Multiple providers**: OpenAI, Azure OpenAI / Foundry, Anthropic, Ollama, and GitHub Copilot.
+- **Credential Manager support**: Keep API keys out of plain-text config when you want a safer setup.
 
-## Installation
+## Best Experience
 
-### Download
+1. Install Turbophrase and start it from the tray.
+2. Open **Settings** from the tray menu.
+3. Add or test your preferred provider on the **Providers** page.
+4. Keep the default hotkeys or adjust them on the **Hotkeys** page.
+5. Select text in any app and use the operation picker or a direct preset shortcut.
+
+Most users should not need to edit `turbophrase.json` by hand.
+
+## Install
+
+### GitHub Releases
 
 Download the latest release from [GitHub Releases](https://github.com/MoaidHathot/Turbophrase/releases):
 
-- `Turbophrase-x.x.x-win-x64.zip` - For Intel/AMD 64-bit systems
-- `Turbophrase-x.x.x-win-arm64.zip` - For ARM64 systems (Surface Pro X, etc.)
+- `Turbophrase-x.x.x-win-x64.zip` for Intel/AMD 64-bit systems
+- `Turbophrase-x.x.x-win-arm64.zip` for ARM64 systems
 
-Extract and run `Turbophrase.exe`.
+Extract the archive and run `Turbophrase.exe`.
 
 ### Winget
 
@@ -27,407 +38,196 @@ Extract and run `Turbophrase.exe`.
 winget install Turbophrase.Turbophrase
 ```
 
-### Microsoft Store / MSIX
-
-Turbophrase can also be packaged for the Microsoft Store or as a
-sideload-signed `.msix`. See [docs/store.md](docs/store.md) for the full
-submission and packaging workflow. The same `Turbophrase.exe` runs in
-both contexts; configuration paths, `XDG_CONFIG_HOME`, `--config`,
-hotkeys, and Credential Manager all behave identically.
-
-## Configuration
-
-On first run, Turbophrase creates a configuration file at `%APPDATA%\Turbophrase\turbophrase.json`.
-
-### Config File Location
-
-Turbophrase resolves the configuration file using the following lookup order:
-
-| Priority | Location | Description |
-|----------|----------|-------------|
-| 1 | `--config <path>` | Explicit path passed as a CLI argument |
-| 2 | `XDG_CONFIG_HOME/Turbophrase/turbophrase.json` | Preferred XDG location if the file exists |
-| 3 | `XDG_CONFIG_HOME/Turbophrase/config.json` | Legacy XDG fallback for existing installs |
-| 4 | `%APPDATA%\Turbophrase\turbophrase.json` | Preferred default location |
-| 5 | `%APPDATA%\Turbophrase\config.json` | Legacy default fallback for existing installs |
-
-The `XDG_CONFIG_HOME` support allows you to keep your config in a shared dotfiles directory or a custom location without passing `--config` every time:
-
-```powershell
-# Example: store config under your dotfiles
-$env:XDG_CONFIG_HOME = "C:\Users\you\.config"
-# Turbophrase will look for: C:\Users\you\.config\Turbophrase\turbophrase.json
-```
-
-### Custom Config Path
-
-Use a custom configuration file:
-
-```powershell
-Turbophrase.exe --config "C:\path\to\turbophrase.json"
-```
-
-Create a default config file at a custom path:
-
-```powershell
-Turbophrase.exe --config "C:\path\to\turbophrase.json" --init-config
-```
-
-### API Keys
-
-Configure your AI provider by adding your API key to the config file. You can use environment variable references with the `${VAR_NAME}` syntax:
-
-```json
-{
-  "providers": {
-    "openai": {
-      "apiKey": "${OPENAI_API_KEY}",
-      "model": "gpt-4o-mini"
-    }
-  },
-  "defaultProvider": "openai"
-}
-```
-
-This works for any provider property -- `apiKey`, `endpoint`, `model`, and `deploymentName` all support `${...}` substitution.
-
-### Environment Variable Overrides
-
-In addition to `${...}` substitution in the config file, Turbophrase reads environment variables prefixed with `TURBOPHRASE_` and maps them to configuration properties. This lets you override any config value without editing the file:
-
-```powershell
-# Override the default provider
-$env:TURBOPHRASE_DEFAULTPROVIDER = "anthropic"
-
-# Override a provider's API key
-$env:TURBOPHRASE_PROVIDERS__OPENAI__APIKEY = "sk-..."
-```
-
-The mapping follows the [.NET configuration](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/configuration/) naming convention: use double underscores (`__`) to separate nested keys.
-
-## Default Hotkeys
+## Default Shortcuts
 
 | Hotkey | Action |
 |--------|--------|
+| `Ctrl+Shift+O` | Open operation picker |
+| `Ctrl+Shift+Space` | Open custom prompt |
 | `Ctrl+Shift+G` | Fix grammar |
-| `Ctrl+Shift+P` | Paraphrase text |
+| `Ctrl+Shift+P` | Paraphrase |
 | `Ctrl+Shift+F` | Make formal |
 | `Ctrl+Shift+C` | Make casual |
 
-Hotkeys can be customized in the configuration file.
+Hotkeys are customizable from **Settings -> Hotkeys**.
 
-## Custom Presets and Hotkeys
+## Operation Picker
 
-You can define your own text transformations and hotkeys in `turbophrase.json`.
+The operation picker is the fastest way to use Turbophrase once you have more than a few transformations.
 
-### Adding a Custom Preset
+1. Select text in any app.
+2. Press `Ctrl+Shift+O`.
+3. Type to filter operations, or use the visible row numbers.
+4. Press `Enter` to run the selected operation.
+5. Turbophrase replaces the selected text with the result.
 
-Presets define the AI prompt used for transformation. Each preset can optionally use a different provider:
+The picker includes default presets like grammar, paraphrase, formal, and casual. You can add more presets or picker-only actions from Settings.
 
-```json
-{
-  "presets": {
-    "grammar": {
-      "name": "Fix Grammar",
-      "systemPrompt": "Fix all grammar, spelling, and punctuation errors. Return ONLY the corrected text.",
-      "provider": null
-    },
-    "translate-spanish": {
-      "name": "Translate to Spanish",
-      "systemPrompt": "Translate the following text to Spanish. Return ONLY the translated text.",
-      "provider": null
-    },
-    "summarize": {
-      "name": "Summarize",
-      "systemPrompt": "Summarize the following text in 2-3 sentences. Return ONLY the summary.",
-      "provider": "anthropic"
-    },
-    "code-review": {
-      "name": "Code Review",
-      "systemPrompt": "Review this code and suggest improvements. Be concise.",
-      "provider": "copilot"
-    }
-  }
-}
-```
+## Custom Prompt
 
-### Adding Custom Hotkeys
+Use custom prompt when you want to give one-off instructions.
 
-Bind any key combination to any preset:
+1. Select text in any app.
+2. Press `Ctrl+Shift+Space`.
+3. Type an instruction, such as `make this warmer but still concise`.
+4. Press `Ctrl+Enter` to run.
 
-```json
-{
-  "hotkeys": [
-    { "keys": "Ctrl+Shift+G", "preset": "grammar" },
-    { "keys": "Ctrl+Shift+P", "preset": "paraphrase" },
-    { "keys": "Ctrl+Shift+F", "preset": "formal" },
-    { "keys": "Ctrl+Shift+C", "preset": "casual" },
-    { "keys": "Ctrl+Alt+S", "preset": "translate-spanish" },
-    { "keys": "Ctrl+Alt+R", "preset": "summarize" },
-    { "keys": "Ctrl+Alt+C", "preset": "code-review" }
-  ]
-}
-```
+Custom prompt shortcuts inside the prompt window:
 
-You can also bind a hotkey to a one-off prompt dialog instead of a preset:
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Enter` | Run prompt |
+| `Ctrl+Up` / `Ctrl+Down` | Previous / next provider |
+| `Alt+1` through `Alt+9` | Jump to provider by index |
+| `Esc` | Cancel |
 
-```json
-{
-  "hotkeys": [
-    { "keys": "Ctrl+Shift+K", "action": "custom-prompt", "name": "Ask AI" }
-  ]
-}
-```
+## Settings UI
 
-Or bind a hotkey to an operation picker that lists configured presets. Type to filter, press `Enter` to select the top match, or press a visible item number and then `Enter`:
-
-```json
-{
-  "hotkeys": [
-    { "keys": "Ctrl+F7", "action": "preset-picker", "name": "Choose Operation" }
-  ]
-}
-```
-
-Picker order is controlled by `pickerOrder`; lower numbers appear first. Presets are included by default, and can be hidden with `includeInPicker: false`. Non-preset actions are excluded by default, and can be added either through `pickerActions` or by setting `includeInPicker: true` on an existing hotkey action:
-
-```json
-{
-  "hotkeys": [
-    { "keys": "Ctrl+F7", "action": "preset-picker", "name": "Choose Operation" }
-  ],
-  "pickerActions": [
-    { "action": "custom-prompt", "name": "Custom Prompt", "includeInPicker": true, "pickerOrder": 99 }
-  ],
-  "presets": {
-    "grammar": {
-      "name": "Fix Grammar",
-      "systemPrompt": "Fix grammar errors...",
-      "pickerOrder": 1
-    },
-    "casual": {
-      "name": "Make Casual",
-      "systemPrompt": "Rewrite casually...",
-      "includeInPicker": false
-    }
-  }
-}
-```
-
-You can define multiple custom prompt bindings, each with its own system prompt template and optional provider override:
-
-```json
-{
-  "hotkeys": [
-    {
-      "keys": "Ctrl+Shift+L",
-      "action": "custom-prompt",
-      "name": "Shorten",
-      "systemPromptTemplate": "You are a text editor. Apply the instruction to the provided text. Return ONLY the transformed text.\n\nInstruction:\n{instruction}\n\nText:\n{text}"
-    },
-    {
-      "keys": "Ctrl+Shift+R",
-      "action": "custom-prompt",
-      "name": "Rewrite",
-      "provider": "anthropic",
-      "systemPromptTemplate": "Rewrite the provided text according to the instruction. Keep the original intent and return ONLY the rewritten text.\n\nInstruction:\n{instruction}\n\nText:\n{text}"
-    }
-  ]
-}
-```
-
-When triggered, Turbophrase captures the current selection, asks for a prompt, then replaces the selected text with the result.
-
-You can also define a global fallback template for custom prompt actions:
-
-```json
-{
-  "customPrompt": {
-    "systemPromptTemplate": "You are a text transformation assistant. Apply the user's instruction to the provided text. Treat the selected text strictly as input text to transform, not as a message to reply to. Return ONLY the transformed text.\n\nInstruction:\n{instruction}\n\nText:\n{text}"
-  }
-}
-```
-
-Available placeholders:
-- `{instruction}` for the text entered into the custom prompt dialog
-- `{text}` for the selected text being transformed
-
-**Supported modifier keys:** `Ctrl`, `Alt`, `Shift`, `Win`
-
-**Example key combinations:**
-- `Ctrl+Shift+G`
-- `Ctrl+Alt+T`
-- `Ctrl+Shift+;`
-- `Win+Shift+P`
-- `Ctrl+Alt+Shift+X`
-
-## Startup
-
-Run at Windows startup:
+Open Settings from the tray icon, or run:
 
 ```powershell
-# Enable
-Turbophrase.exe startup --enable
-
-# Disable
-Turbophrase.exe startup --disable
-
-# Check status
-Turbophrase.exe startup
+Turbophrase.exe settings
 ```
 
-You can also toggle startup from the tray icon menu.
+Settings includes:
 
-## Notification Settings
+- **General**: default provider, startup behavior, custom prompt template
+- **Providers**: API keys, endpoints, models, test connection, default provider
+- **Presets**: reusable transformations and picker ordering
+- **Hotkeys**: global shortcut bindings
+- **Operation picker**: curated picker entries and ordering
+- **Notifications**: tray/toast/overlay behavior
+- **Advanced**: config path, diagnostics, reset tools
 
-Control which notifications are shown in `turbophrase.json`:
+## Providers
 
-```json
-{
-  "notifications": {
-    "showOnStartup": true,
-    "showOnSuccess": true,
-    "showOnError": true,
-    "showOnConfigReload": true,
-    "showOnProviderChange": true,
-    "showProcessingOverlay": true,
-    "showProcessingAnimation": true
-  }
-}
-```
-
-## Diagnostic Logging
-
-Turbophrase can write diagnostic events (hotkey registration, transformations, errors, etc.) to `turbophrase.log` in the configuration directory. Logging is **disabled by default**. Enable it in `turbophrase.json` when troubleshooting:
-
-```json
-{
-  "logging": {
-    "enabled": true
-  }
-}
-```
-
-The log file is created at `%APPDATA%\Turbophrase\turbophrase.log` (or under `XDG_CONFIG_HOME/Turbophrase` / your custom `--config` directory). Changes take effect on the next config reload.
-
-## Supported Providers
+Turbophrase can use several providers. Configure them in **Settings -> Providers**.
 
 ### OpenAI
 
-```json
-{
-  "providers": {
-    "openai": {
-      "apiKey": "${OPENAI_API_KEY}",
-      "model": "gpt-4o-mini"
-    }
-  }
-}
+Use an OpenAI API key and model such as `gpt-4o` or `gpt-4o-mini`.
+
+Environment variable example:
+
+```powershell
+setx OPENAI_API_KEY "sk-..."
 ```
 
-### Azure OpenAI
+### Azure OpenAI / Foundry
 
-```json
-{
-  "providers": {
-    "azureopenai": {
-      "apiKey": "${AZURE_OPENAI_API_KEY}",
-      "endpoint": "https://your-resource.openai.azure.com",
-      "deploymentName": "gpt-4o-mini"
-    }
-  }
-}
+Azure can be configured either with a resource endpoint and deployment name, or with the full Foundry chat-completions URL.
+
+Supported full Foundry endpoint example:
+
+```text
+https://your-resource.cognitiveservices.azure.com/openai/deployments/gpt-4.1-mini/chat/completions?api-version=2025-01-01-preview
 ```
+
+Turbophrase extracts the resource endpoint and deployment name automatically.
+
+Environment variable examples:
+
+```powershell
+setx AZURE_OPENAI_ENDPOINT "https://your-resource.cognitiveservices.azure.com/openai/deployments/gpt-4.1-mini/chat/completions?api-version=2025-01-01-preview"
+setx AZURE_OPENAI_KEY "..."
+```
+
+Restart Turbophrase after changing persistent environment variables so the tray process can see them.
 
 ### Anthropic
 
-```json
-{
-  "providers": {
-    "anthropic": {
-      "apiKey": "${ANTHROPIC_API_KEY}",
-      "model": "claude-3-5-sonnet-20241022"
-    }
-  }
-}
+Use an Anthropic API key and model such as `claude-sonnet-4-20250514`.
+
+```powershell
+setx ANTHROPIC_API_KEY "sk-ant-..."
 ```
 
 ### Ollama
 
-```json
-{
-  "providers": {
-    "ollama": {
-      "endpoint": "http://localhost:11434",
-      "model": "llama3.2"
-    }
-  }
-}
-```
+Use local models through an Ollama endpoint, usually `http://localhost:11434`.
 
 ### GitHub Copilot
 
-Uses your existing GitHub Copilot subscription. Requires the GitHub Copilot CLI to be installed and authenticated.
+Uses the bundled GitHub Copilot SDK/CLI integration with your logged-in GitHub Copilot account. No API key is required.
 
-```json
-{
-  "providers": {
-    "copilot": {
-      "type": "copilot",
-      "model": "gpt-4o"
-    }
-  }
-}
+## Presets
+
+Presets are reusable transformations. Turbophrase includes:
+
+- Fix Grammar
+- Paraphrase
+- Make Formal
+- Make Casual
+
+Create your own presets from **Settings -> Presets**. Each preset can:
+
+- use the default provider or a provider override
+- appear in the operation picker
+- have a custom picker order
+- be bound directly to a hotkey
+
+Good preset examples:
+
+- Translate to Spanish
+- Summarize
+- Shorten
+- Make friendlier
+- Review tone
+- Convert notes to email
+
+## Startup And Notifications
+
+Use **Settings -> General** to run Turbophrase at Windows startup.
+
+Use **Settings -> Notifications** to control:
+
+- startup notification
+- success/error notifications
+- config reload notifications
+- processing overlay
+- tray icon animation
+
+## Troubleshooting
+
+### Selected Text Is Not Captured
+
+- Make sure text is selected before pressing the hotkey.
+- Try the picker shortcut again after releasing all modifier keys.
+- Some apps handle copy shortcuts differently. Turbophrase tries multiple copy methods, but heavily customized editors can still interfere.
+- Enable diagnostics from **Settings -> Advanced** if the issue is repeatable.
+
+### Provider Is Not Configured
+
+- Open **Settings -> Providers** and use **Test connection**.
+- Check that API keys, endpoints, and deployment names are resolved, not left as `${ENV_VAR}` placeholders.
+- Restart Turbophrase after changing persistent environment variables with `setx` or Windows Settings.
+
+### Azure Endpoint Errors
+
+For Azure OpenAI / Foundry, either use:
+
+- resource endpoint: `https://your-resource.openai.azure.com` plus deployment name
+- full Foundry endpoint: `https://your-resource.cognitiveservices.azure.com/openai/deployments/<deployment>/chat/completions?...`
+
+## Advanced
+
+Turbophrase stores configuration at `%APPDATA%\Turbophrase\turbophrase.json` by default. The Settings UI is the recommended way to edit it.
+
+Useful CLI commands:
+
+```powershell
+Turbophrase.exe settings
+Turbophrase.exe config
+Turbophrase.exe test [provider-name]
+Turbophrase.exe startup --enable
+Turbophrase.exe startup --disable
+Turbophrase.exe secrets list
+Turbophrase.exe secrets set <name>
 ```
 
-**Prerequisites:**
+Advanced config routing is still supported for portable or dotfiles workflows, including `--config <path>` and `XDG_CONFIG_HOME`, but those are not needed for the normal experience.
 
-- Active [GitHub Copilot subscription](https://github.com/features/copilot) (Individual, Business, or Enterprise)
-- GitHub Copilot CLI installed and authenticated
-
-**Setup:**
-
-1. Install the GitHub Copilot CLI via npm:
-   ```powershell
-   npm install -g @anthropic-ai/copilot-cli
-   ```
-   Or download from [GitHub Copilot CLI releases](https://github.com/github/copilot-cli/releases)
-
-2. Authenticate with your GitHub account:
-   ```powershell
-   copilot auth login
-   ```
-
-3. Verify it's working:
-   ```powershell
-   copilot --version
-   ```
-
-**Version Compatibility:**
-
-The Copilot CLI and SDK versions should be compatible. Turbophrase uses GitHub.Copilot.SDK v0.1.32, which bundles the matching CLI version. If you experience issues, ensure your globally installed CLI is up to date.
-
-| Turbophrase Version | SDK Version | Bundled CLI Version |
-|---------------------|-------------|---------------------|
-| 1.0.0               | 0.1.32      | 1.0.2               |
-
-**Note:** No API key is required - authentication is handled through your GitHub account via the CLI.
-
-## CLI Reference
-
-```
-turbophrase [options]              Start as system tray application
-turbophrase init [options]         Create default configuration file
-turbophrase config [options]       Show current configuration
-turbophrase test [name] [options]  Test provider connection
-turbophrase startup                Show startup registration status
-turbophrase startup --enable       Enable run at Windows startup
-turbophrase startup --disable      Disable run at Windows startup
-turbophrase help                   Show help message
-turbophrase version                Show version information
-```
-
-## Building from Source
+## Building From Source
 
 ### Prerequisites
 
@@ -437,43 +237,27 @@ turbophrase version                Show version information
 ### Build
 
 ```powershell
-# Restore and build
 dotnet build src/Turbophrase.slnx
-
-# Run tests
 dotnet test src/Turbophrase.slnx
-
-# Create release artifacts
-./build.ps1 -Version 1.0.0
 ```
 
-### Running Tests
-
-The project includes 80 unit tests covering configuration, models, and provider logic:
+Create release artifacts:
 
 ```powershell
-# Run all tests
-dotnet test src/Turbophrase.slnx
-
-# Run with detailed output
-dotnet test src/Turbophrase.slnx --verbosity normal
-
-# Run specific test project
-dotnet test tests/Turbophrase.Core.Tests/Turbophrase.Core.Tests.csproj
-dotnet test tests/Turbophrase.Providers.Tests/Turbophrase.Providers.Tests.csproj
+./build.ps1 -Version 1.0.0
 ```
 
 ### Project Structure
 
-```
+```text
 src/
-  Turbophrase/           # Main WinForms tray application
-  Turbophrase.Core/      # Core library (configuration, abstractions)
+  Turbophrase/           # Windows tray app and UI
+  Turbophrase.Core/      # Configuration and abstractions
   Turbophrase.Providers/ # AI provider implementations
   Turbophrase.slnx       # Solution file
 tests/
-  Turbophrase.Core.Tests/      # Configuration and model tests (53 tests)
-  Turbophrase.Providers.Tests/ # Provider factory and provider tests (27 tests)
+  Turbophrase.Core.Tests/
+  Turbophrase.Providers.Tests/
 ```
 
 ## License
