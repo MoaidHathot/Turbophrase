@@ -476,16 +476,42 @@ public class TrayApplicationContext : ApplicationContext
 
     private async Task ExecutePresetPickerAsync(HotkeyBinding binding)
     {
-        var captureResult = await _orchestrator.CaptureSelectedTextAsync();
-        if (!captureResult.Success)
+        var sourceWindowHandle = _orchestrator.GetActiveWindowHandle();
+        using var dialog = new PresetPickerDialog(GetPickerOperations());
+        dialog.SetCapturePending();
+        var captureCompletion = new TaskCompletionSource<SelectionCaptureResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        dialog.Shown += async (_, _) =>
         {
-            ShowTransformResult(TransformResult.Fail(captureResult.ErrorMessage ?? "No text is selected."), GetBindingDisplayName(binding));
+            var captureResult = await CaptureForCommandSurfaceAsync(sourceWindowHandle, dialog);
+            captureCompletion.TrySetResult(captureResult);
+
+            if (dialog.IsDisposed)
+            {
+                return;
+            }
+
+            if (captureResult.Success)
+            {
+                dialog.SetCaptureReady();
+            }
+            else
+            {
+                dialog.SetCaptureFailed(captureResult.ErrorMessage ?? "No text is selected.");
+            }
+
+            dialog.ActivateForInput();
+        };
+
+        if (dialog.ShowDialog() != DialogResult.OK || dialog.SelectedOperation == null)
+        {
             return;
         }
 
-        using var dialog = new PresetPickerDialog(GetPickerOperations());
-        if (dialog.ShowDialog() != DialogResult.OK || dialog.SelectedOperation == null)
+        var captureResult = await captureCompletion.Task;
+        if (!captureResult.Success)
         {
+            ShowTransformResult(TransformResult.Fail(captureResult.ErrorMessage ?? "No text is selected."), GetBindingDisplayName(binding));
             return;
         }
 
@@ -514,25 +540,33 @@ public class TrayApplicationContext : ApplicationContext
 
     private async Task ExecuteCustomPromptAsync(HotkeyBinding? binding = null)
     {
-        var captureResult = await _orchestrator.CaptureSelectedTextAsync();
-        if (!captureResult.Success)
-        {
-            ShowTransformResult(TransformResult.Fail(captureResult.ErrorMessage ?? "No text is selected."), GetBindingDisplayName(binding));
-            return;
-        }
-
-        await ExecuteCustomPromptAsync(binding, captureResult);
-    }
-
-    private async Task ExecuteCustomPromptAsync(HotkeyBinding? binding, SelectionCaptureResult captureResult)
-    {
-        if (!captureResult.Success)
-        {
-            ShowTransformResult(TransformResult.Fail(captureResult.ErrorMessage ?? "No text is selected."), GetBindingDisplayName(binding));
-            return;
-        }
-
+        var sourceWindowHandle = _orchestrator.GetActiveWindowHandle();
         using var dialog = new CustomPromptDialog(_orchestrator.AvailableProviders, _config.DefaultProvider);
+        dialog.SetCapturePending();
+        var captureCompletion = new TaskCompletionSource<SelectionCaptureResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        dialog.Shown += async (_, _) =>
+        {
+            var captureResult = await CaptureForCommandSurfaceAsync(sourceWindowHandle, dialog);
+            captureCompletion.TrySetResult(captureResult);
+
+            if (dialog.IsDisposed)
+            {
+                return;
+            }
+
+            if (captureResult.Success)
+            {
+                dialog.SetCaptureReady();
+            }
+            else
+            {
+                dialog.SetCaptureFailed(captureResult.ErrorMessage ?? "No text is selected.");
+            }
+
+            dialog.ActivateForInput();
+        };
+
         if (dialog.ShowDialog() != DialogResult.OK)
         {
             return;
@@ -544,12 +578,62 @@ public class TrayApplicationContext : ApplicationContext
             return;
         }
 
+        var captureResult = await captureCompletion.Task;
+        if (!captureResult.Success)
+        {
+            ShowTransformResult(TransformResult.Fail(captureResult.ErrorMessage ?? "No text is selected."), GetBindingDisplayName(binding));
+            return;
+        }
+
+        await ExecuteCustomPromptAsync(binding, captureResult, dialog.PromptText, dialog.SelectedProvider);
+    }
+
+    private async Task ExecuteCustomPromptAsync(HotkeyBinding? binding, SelectionCaptureResult captureResult)
+    {
+        using var dialog = new CustomPromptDialog(_orchestrator.AvailableProviders, _config.DefaultProvider);
+        dialog.SetCaptureReady();
+
+        if (dialog.ShowDialog() != DialogResult.OK)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(dialog.PromptText))
+        {
+            ShowTransformResult(TransformResult.Fail("Prompt cannot be empty."), GetBindingDisplayName(binding));
+            return;
+        }
+
+        await ExecuteCustomPromptAsync(binding, captureResult, dialog.PromptText, dialog.SelectedProvider);
+    }
+
+    private async Task ExecuteCustomPromptAsync(HotkeyBinding? binding, SelectionCaptureResult captureResult, string promptText, string? selectedProvider)
+    {
+        if (!captureResult.Success)
+        {
+            ShowTransformResult(TransformResult.Fail(captureResult.ErrorMessage ?? "No text is selected."), GetBindingDisplayName(binding));
+            return;
+        }
+
         await ExecuteTransformWithIndicatorsAsync(
             async () => await _orchestrator.TransformCapturedTextAsync(
                 captureResult,
-                BuildCustomPromptSystemPrompt(binding, dialog.PromptText, captureResult.SelectedText ?? string.Empty),
-                binding?.Provider ?? dialog.SelectedProvider),
+                BuildCustomPromptSystemPrompt(binding, promptText, captureResult.SelectedText ?? string.Empty),
+                binding?.Provider ?? selectedProvider),
             GetBindingDisplayName(binding));
+    }
+
+    private async Task<SelectionCaptureResult> CaptureForCommandSurfaceAsync(IntPtr sourceWindowHandle, Form dialog)
+    {
+        try
+        {
+            var result = await _orchestrator.CaptureSelectedTextAsync(sourceWindowHandle, restoreFocusBeforeCopy: true);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            return SelectionCaptureResult.Fail($"Could not capture selected text: {ex.Message}");
+        }
     }
 
     private List<PickerOperation> GetPickerOperations()

@@ -38,7 +38,28 @@ public class TextTransformOrchestrator
     public async Task<SelectionCaptureResult> CaptureSelectedTextAsync()
     {
         var sourceWindowHandle = _clipboardService.GetActiveWindowHandle();
+        return await CaptureSelectedTextAsync(sourceWindowHandle);
+    }
+
+    /// <summary>
+    /// Gets the current foreground window handle so UI can be shown before delayed selection capture starts.
+    /// </summary>
+    public IntPtr GetActiveWindowHandle() => _clipboardService.GetActiveWindowHandle();
+
+    /// <summary>
+    /// Captures selected text from a known source window and remembers that window for paste-back.
+    /// </summary>
+    public async Task<SelectionCaptureResult> CaptureSelectedTextAsync(IntPtr sourceWindowHandle, bool restoreFocusBeforeCopy = false)
+    {
         RuntimeLog.Write($"selection-capture-start hwnd=0x{sourceWindowHandle.ToInt64():X}");
+
+        if (restoreFocusBeforeCopy)
+        {
+            RuntimeLog.Write($"selection-capture-restore-focus hwnd=0x{sourceWindowHandle.ToInt64():X}");
+            _clipboardService.RestoreWindowFocus(sourceWindowHandle);
+            await Task.Delay(50);
+        }
+
         var selectedText = await _clipboardService.GetSelectedTextAsync();
         if (string.IsNullOrWhiteSpace(selectedText))
         {
