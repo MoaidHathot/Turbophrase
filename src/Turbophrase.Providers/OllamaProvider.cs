@@ -50,7 +50,8 @@ public class OllamaProvider : AIProviderBase
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var response = _httpClient.GetAsync("/api/tags", cts.Token).GetAwaiter().GetResult();
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/api/tags");
+            var response = _httpClient.Send(request, cts.Token);
             return response.IsSuccessStatusCode;
         }
         catch

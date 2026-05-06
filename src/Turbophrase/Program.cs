@@ -37,7 +37,7 @@ static class Program
     }
 
     [STAThread]
-    static int Main(string[] args)
+    static async Task<int> Main(string[] args)
     {
         // Enable high DPI support for proper icon scaling
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
@@ -129,7 +129,7 @@ static class Program
         // Handle CLI commands
         if (remainingArgs.Count > 0)
         {
-            return HandleCliCommand(remainingArgs.ToArray());
+            return await HandleCliCommandAsync(remainingArgs.ToArray());
         }
 
         using var singleInstanceMutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out var createdNew);
@@ -145,7 +145,7 @@ static class Program
         return 0;
     }
 
-    private static int HandleCliCommand(string[] args)
+    private static async Task<int> HandleCliCommandAsync(string[] args)
     {
         var command = args[0].ToLowerInvariant();
 
@@ -158,13 +158,13 @@ static class Program
                 return ConfigCommand();
 
             case "test":
-                return TestCommand(args.Length > 1 ? args[1] : null);
+                return await TestCommandAsync(args.Length > 1 ? args[1] : null);
 
             case "startup":
                 return StartupCommand(args.Skip(1).ToArray());
 
             case "settings":
-                return SettingsCommand();
+                return await SettingsCommandAsync();
 
             case "secrets":
                 return SecretsCommand(args.Skip(1).ToArray());
@@ -259,7 +259,7 @@ static class Program
         }
     }
 
-    private static int TestCommand(string? providerName)
+    private static async Task<int> TestCommandAsync(string? providerName)
     {
         Console.WriteLine("Testing provider connection...");
 
@@ -272,9 +272,7 @@ static class Program
 
             Console.WriteLine($"Testing provider: {targetProvider}");
 
-            var task = orchestrator.TestProviderAsync(targetProvider);
-            task.Wait();
-            var result = task.Result;
+            var result = await orchestrator.TestProviderAsync(targetProvider);
 
             if (result.Success)
             {
@@ -416,14 +414,14 @@ static class Program
         return sb.ToString();
     }
 
-    private static int SettingsCommand()
+    private static async Task<int> SettingsCommandAsync()
     {
         // Launches the Settings UI as a one-shot foreground window. Useful when
         // the tray app isn't running (e.g., from a fresh terminal). When the
         // tray IS running, users typically open Settings from the tray menu.
         try
         {
-            AvaloniaUiHost.ShowStandaloneWindowAsync(() => new SettingsWindow()).GetAwaiter().GetResult();
+            await AvaloniaUiHost.ShowStandaloneWindowAsync(() => new SettingsWindow());
             return 0;
         }
         catch (Exception ex)
