@@ -99,11 +99,10 @@ static class Program
                         var errorMsg = $"Failed to create configuration file at: {fullPath}\n\n{ex.Message}";
                         Console.Error.WriteLine(errorMsg);
                         
-                        // Show MessageBox if running as GUI (no CLI commands)
+                        // Show a styled dialog if running as GUI (no CLI commands)
                         if (remainingArgs.Count == 0)
                         {
-                            ApplicationConfiguration.Initialize();
-                            MessageBox.Show(errorMsg, "Turbophrase Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            await ShowStartupMessageAsync("Turbophrase Error", errorMsg, isError: true);
                         }
                         return 1;
                     }
@@ -113,11 +112,10 @@ static class Program
                     var errorMsg = $"Configuration file not found: {fullPath}\n\nUse --init-config to create it with default values.";
                     Console.Error.WriteLine(errorMsg);
                     
-                    // Show MessageBox if running as GUI (no CLI commands)
+                    // Show a styled dialog if running as GUI (no CLI commands)
                     if (remainingArgs.Count == 0)
                     {
-                        ApplicationConfiguration.Initialize();
-                        MessageBox.Show(errorMsg, "Turbophrase Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        await ShowStartupMessageAsync("Turbophrase Error", errorMsg, isError: true);
                     }
                     return 1;
                 }
@@ -186,6 +184,11 @@ static class Program
                 PrintHelp();
                 return 1;
         }
+    }
+
+    private static Task ShowStartupMessageAsync(string title, string message, bool isError)
+    {
+        return AvaloniaUiHost.ShowStandaloneWindowAsync(() => new AppMessageWindow(title, message, isError));
     }
 
     private static int InitCommand()

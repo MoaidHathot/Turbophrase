@@ -4,7 +4,6 @@ using Turbophrase.Core.Configuration;
 using Turbophrase.Avalonia;
 using Turbophrase.Avalonia.Windows;
 using Turbophrase.Services;
-using Turbophrase.Settings;
 
 namespace Turbophrase;
 
@@ -22,7 +21,7 @@ public class TrayApplicationContext : ApplicationContext
     private readonly HotkeyMessageFilter _messageFilter;
     private readonly ConfigurationWatcher _configWatcher;
     private readonly TrayIconAnimator _iconAnimator;
-    private readonly ProcessingOverlay _processingOverlay;
+    private readonly ProcessingOverlayWindow _processingOverlay;
     private readonly SynchronizationContext _uiContext;
     private readonly int _uiThreadId;
     private SettingsWindow? _settingsWindow;
@@ -52,10 +51,11 @@ public class TrayApplicationContext : ApplicationContext
             // First-run onboarding: if no provider has usable credentials,
             // show the wizard before bringing up the rest of the tray. The
             // wizard writes turbophrase.json directly; we then re-load.
-            if (FirstRunWizard.ShouldShowFor(_config))
+            if (FirstRunWindow.ShouldShowFor(_config))
             {
-                using var wizard = new FirstRunWizard();
-                if (wizard.ShowDialog() == DialogResult.OK)
+                FirstRunWindow? wizard = null;
+                AvaloniaUiHost.ShowStandaloneWindowAsync(() => wizard = new FirstRunWindow()).GetAwaiter().GetResult();
+                if (wizard?.Accepted == true)
                 {
                     _config = ConfigurationService.LoadConfiguration();
                     RuntimeLog.Configure(_config.Logging);
@@ -75,15 +75,15 @@ public class TrayApplicationContext : ApplicationContext
             {
                 Icon = LoadApplicationIcon(),
                 Visible = true,
-                Text = "Turbophrase - AI Text Transformer",
-                ContextMenuStrip = CreateContextMenu()
+                Text = "Turbophrase - AI Text Transformer"
             };
+            _trayIcon.MouseUp += OnTrayIconMouseUp;
 
             // Create icon animator for processing indication
             _iconAnimator = new TrayIconAnimator(_trayIcon);
 
             // Create processing overlay for visible feedback
-            _processingOverlay = new ProcessingOverlay();
+            _processingOverlay = AvaloniaUiHost.Invoke(() => new ProcessingOverlayWindow());
 
             // Register hotkeys
             RegisterHotkeys();
@@ -106,9 +106,24 @@ public class TrayApplicationContext : ApplicationContext
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Failed to start Turbophrase:\n\n{ex.Message}", "Turbophrase Error", 
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            ShowStartupError(ex);
             throw;
+        }
+    }
+
+    private static void ShowStartupError(Exception ex)
+    {
+        try
+        {
+            AvaloniaUiHost.ShowStandaloneWindowAsync(() => new AppMessageWindow(
+                "Turbophrase Error",
+                $"Failed to start Turbophrase:\n\n{ex.Message}",
+                isError: true)).GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // If Avalonia itself failed, write to stderr as the last available fallback.
+            Console.Error.WriteLine($"Failed to start Turbophrase: {ex}");
         }
     }
 
@@ -176,9 +191,6 @@ public class TrayApplicationContext : ApplicationContext
             // Re-register hotkeys with new config
             RegisterHotkeys();
 
-            // Update context menu
-            _trayIcon.ContextMenuStrip = CreateContextMenu();
-
             // Notify user (if enabled)
             if (_config.Notifications.ShowOnConfigReload)
             {
@@ -227,9 +239,6 @@ public class TrayApplicationContext : ApplicationContext
             // Update in-memory config
             _config.DefaultProvider = providerName;
             _orchestrator = new TextTransformOrchestrator(_config);
-
-            // Update context menu to reflect the change
-            _trayIcon.ContextMenuStrip = CreateContextMenu();
 
             // Notify user (if enabled)
             if (_config.Notifications.ShowOnProviderChange)
@@ -286,7 +295,7 @@ public class TrayApplicationContext : ApplicationContext
             RuntimeLog.Write($"hotkey-handler-exception error='{ex.Message}'");
             // Ensure indicators are hidden even on exception
             _iconAnimator.StopAnimation();
-            _processingOverlay.HideOverlay();
+            AvaloniaUiHost.Invoke(_processingOverlay.HideOverlay);
 
             if (_config.Notifications.ShowOnError)
             {
@@ -298,151 +307,146 @@ public class TrayApplicationContext : ApplicationContext
         }
     }
 
-    private ContextMenuStrip CreateContextMenu()
+    private void OnTrayIconMouseUp(object? sender, MouseEventArgs e)
     {
-        var menu = new ContextMenuStrip();
-
-        // Presets submenu
-        var presetsMenu = new ToolStripMenuItem("Transform");
-        var customPromptItem = new ToolStripMenuItem("Custom Prompt...");
-        customPromptItem.Click += async (_, _) =>
+        if (e.Button is MouseButtons.Left or MouseButtons.Right)
         {
-            await ExecuteCustomPromptAsync();
+            OpenTrayMenuWindow();
+        }
+    }
+
+    private void OpenTrayMenuWindow()
+    {
+        AvaloniaUiHost.Invoke(() =>
+        {
+            var menu = new TrayMenuWindow(BuildTrayMenuSections());
+            menu.Show();
+            menu.Activate();
+        });
+    }
+
+    private IReadOnlyList<TrayMenuSection> BuildTrayMenuSections()
+    {
+        var transformItems = new List<TrayMenuItem>
+        {
+            new("Custom Prompt", "Capture selected text and enter one-off instructions.", InvokeAsync: () => RunOnTrayThread(() => ExecuteCustomPromptAsync()))
         };
-        presetsMenu.DropDownItems.Add(customPromptItem);
-        presetsMenu.DropDownItems.Add(new ToolStripSeparator());
 
         foreach (var (key, preset) in _config.Presets)
         {
             var presetName = key;
-            var presetDisplayName = preset.Name ?? key;
-            var item = new ToolStripMenuItem(presetDisplayName);
-            item.Click += async (_, _) =>
-            {
-                await ExecutePresetAsync(presetName, presetDisplayName);
-            };
-            presetsMenu.DropDownItems.Add(item);
+            var displayName = preset.Name ?? key;
+            transformItems.Add(new TrayMenuItem(
+                displayName,
+                preset.Provider == null ? "Uses default provider" : $"Uses {preset.Provider}",
+                InvokeAsync: () => RunOnTrayThread(() => ExecutePresetAsync(presetName, displayName))));
         }
-        menu.Items.Add(presetsMenu);
 
-        menu.Items.Add(new ToolStripSeparator());
+        var hotkeyItems = _config.Hotkeys
+            .Select(hotkey => new TrayMenuItem(GetBindingDisplayName(hotkey), hotkey.Keys, Enabled: false))
+            .ToList();
 
-        // Hotkeys info
-        var hotkeysMenu = new ToolStripMenuItem("Hotkeys");
-        foreach (var hotkey in _config.Hotkeys)
+        var providerItems = _orchestrator.AvailableProviders
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .Select(providerName => new TrayMenuItem(
+                providerName,
+                providerName == _config.DefaultProvider ? "Default provider" : "Set as default",
+                Checked: providerName == _config.DefaultProvider,
+                InvokeAsync: providerName == _config.DefaultProvider
+                    ? null
+                    : () => RunOnTrayThread(() => ChangeDefaultProvider(providerName))))
+            .ToList();
+
+        return
+        [
+            new TrayMenuSection("Transform", transformItems),
+            new TrayMenuSection("Hotkeys", hotkeyItems.Count == 0 ? [new TrayMenuItem("No hotkeys configured", Enabled: false)] : hotkeyItems),
+            new TrayMenuSection("Providers", providerItems.Count == 0 ? [new TrayMenuItem("No providers available", Enabled: false)] : providerItems),
+            new TrayMenuSection("App", BuildAppMenuItems())
+        ];
+    }
+
+    private IReadOnlyList<TrayMenuItem> BuildAppMenuItems()
+    {
+        var startupEnabled = StartupManager.IsEnabled();
+        return
+        [
+            new("Settings", "Configure providers, presets, hotkeys, and behavior.", InvokeAsync: () => RunOnTrayThread(OpenSettingsWindow)),
+            new("Open Config Folder", ConfigurationService.ConfigDirectory, InvokeAsync: () => RunOnTrayThread(OpenConfigFolder)),
+            new("Reload Configuration", ConfigurationService.ConfigFilePath, InvokeAsync: () => RunOnTrayThread(ReloadConfiguration)),
+            new("Run at Windows startup", startupEnabled ? "Enabled" : "Disabled", Checked: startupEnabled, InvokeAsync: () => RunOnTrayThread(ToggleStartup)),
+            new("Exit", "Close Turbophrase.", InvokeAsync: () => RunOnTrayThread(ExitThread))
+        ];
+    }
+
+    private Task RunOnTrayThread(Action action) => RunOnTrayThread(() =>
+    {
+        action();
+        return Task.CompletedTask;
+    });
+
+    private Task RunOnTrayThread(Func<Task> action)
+    {
+        if (Environment.CurrentManagedThreadId == _uiThreadId)
         {
-            hotkeysMenu.DropDownItems.Add(new ToolStripMenuItem($"{hotkey.Keys} - {GetBindingDisplayName(hotkey)}")
-            {
-                Enabled = false
-            });
+            return action();
         }
-        menu.Items.Add(hotkeysMenu);
 
-        // Providers - now with click handlers for switching
-        var providersMenu = new ToolStripMenuItem("Providers");
-        foreach (var providerName in _orchestrator.AvailableProviders)
-        {
-            var isDefault = providerName == _config.DefaultProvider;
-            var providerItem = new ToolStripMenuItem(providerName)
-            {
-                Checked = isDefault,
-                CheckOnClick = false
-            };
-            var capturedProviderName = providerName; // Capture for closure
-            providerItem.Click += (_, _) =>
-            {
-                if (capturedProviderName != _config.DefaultProvider)
-                {
-                    ChangeDefaultProvider(capturedProviderName);
-                }
-            };
-            providersMenu.DropDownItems.Add(providerItem);
-        }
-        menu.Items.Add(providersMenu);
-
-        menu.Items.Add(new ToolStripSeparator());
-
-        // Settings UI (lazy)
-        var settingsItem = new ToolStripMenuItem("Settings...");
-        settingsItem.Click += (_, _) => OpenSettingsWindow();
-        menu.Items.Add(settingsItem);
-
-        // Open config folder
-        var configItem = new ToolStripMenuItem("Open Config Folder");
-        configItem.Click += (_, _) =>
-        {
-            if (Directory.Exists(ConfigurationService.ConfigDirectory))
-            {
-                System.Diagnostics.Process.Start("explorer.exe", ConfigurationService.ConfigDirectory);
-            }
-            else
-            {
-                if (_config.Notifications.ShowOnError)
-                {
-                    TextTransformOrchestrator.ShowNotification(
-                        "Turbophrase",
-                        "Config folder does not exist. Run 'turbophrase init' first.",
-                        isError: true);
-                }
-            }
-        };
-        menu.Items.Add(configItem);
-
-        // Reload config
-        var reloadItem = new ToolStripMenuItem("Reload Configuration");
-        reloadItem.Click += (_, _) =>
-        {
-            ReloadConfiguration();
-        };
-        menu.Items.Add(reloadItem);
-
-        // Run at startup toggle
-        var startupItem = new ToolStripMenuItem("Run at Windows startup")
-        {
-            Checked = StartupManager.IsEnabled(),
-            CheckOnClick = false
-        };
-        startupItem.Click += (_, _) =>
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _uiContext.Post(async _ =>
         {
             try
             {
-                if (StartupManager.IsEnabled())
-                {
-                    StartupManager.Disable();
-                    startupItem.Checked = false;
-                    if (_config.Notifications.ShowOnSuccess)
-                        TextTransformOrchestrator.ShowNotification("Turbophrase",
-                            "Removed from Windows startup", isError: false);
-                }
-                else
-                {
-                    StartupManager.Enable(ConfigurationService.CustomConfigFilePath);
-                    startupItem.Checked = true;
-                    if (_config.Notifications.ShowOnSuccess)
-                        TextTransformOrchestrator.ShowNotification("Turbophrase",
-                            "Added to Windows startup", isError: false);
-                }
+                await action();
+                completion.TrySetResult();
             }
             catch (Exception ex)
             {
-                if (_config.Notifications.ShowOnError)
-                    TextTransformOrchestrator.ShowNotification("Startup Error",
-                        ex.Message, isError: true);
+                RuntimeLog.Write($"tray-menu-action-failed error='{ex.Message}'");
+                ShowNotification("Turbophrase Error", ex.Message, isError: true);
+                completion.TrySetResult();
             }
-        };
-        menu.Items.Add(startupItem);
+        }, null);
 
-        menu.Items.Add(new ToolStripSeparator());
+        return completion.Task;
+    }
 
-        // Exit
-        var exitItem = new ToolStripMenuItem("Exit");
-        exitItem.Click += (_, _) =>
+    private void OpenConfigFolder()
+    {
+        if (Directory.Exists(ConfigurationService.ConfigDirectory))
         {
-            ExitThread();
-        };
-        menu.Items.Add(exitItem);
+            System.Diagnostics.Process.Start("explorer.exe", ConfigurationService.ConfigDirectory);
+            return;
+        }
 
-        return menu;
+        ShowNotification("Turbophrase", "Config folder does not exist. Run 'turbophrase init' first.", isError: true);
+    }
+
+    private void ToggleStartup()
+    {
+        try
+        {
+            if (StartupManager.IsEnabled())
+            {
+                StartupManager.Disable();
+                if (_config.Notifications.ShowOnSuccess)
+                {
+                    TextTransformOrchestrator.ShowNotification("Turbophrase", "Removed from Windows startup", isError: false);
+                }
+            }
+            else
+            {
+                StartupManager.Enable(ConfigurationService.CustomConfigFilePath);
+                if (_config.Notifications.ShowOnSuccess)
+                {
+                    TextTransformOrchestrator.ShowNotification("Turbophrase", "Added to Windows startup", isError: false);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowNotification("Startup Error", ex.Message, isError: true);
+        }
     }
 
     private async Task ExecuteBindingAsync(HotkeyBinding binding)
@@ -717,7 +721,7 @@ public class TrayApplicationContext : ApplicationContext
         if (_config.Notifications.ShowProcessingAnimation)
             _iconAnimator.StartAnimation();
         if (_config.Notifications.ShowProcessingOverlay)
-            _processingOverlay.ShowOverlay();
+            AvaloniaUiHost.Invoke(_processingOverlay.ShowOverlay);
 
         try
         {
@@ -728,7 +732,7 @@ public class TrayApplicationContext : ApplicationContext
         finally
         {
             _iconAnimator.StopAnimation();
-            _processingOverlay.HideOverlay();
+            AvaloniaUiHost.Invoke(_processingOverlay.HideOverlay);
             RuntimeLog.Write("transform-indicators-stop");
         }
     }
@@ -881,7 +885,7 @@ public class TrayApplicationContext : ApplicationContext
                     _settingsWindow = null;
                 });
             }
-            _processingOverlay.Dispose();
+            AvaloniaUiHost.Invoke(_processingOverlay.Close);
             _iconAnimator.Dispose();
             _configWatcher.Dispose();
             _hotkeyService.Dispose();
