@@ -4,6 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Turbophrase.Avalonia;
 using Turbophrase.Core.Configuration;
 using Turbophrase.Services;
 using AApplication = Avalonia.Application;
@@ -94,6 +95,13 @@ public sealed class FirstRunWindow : Window
     }
 
     public bool Accepted { get; private set; }
+
+    public static async Task<bool> ShowProviderSetupAsync()
+    {
+        FirstRunWindow? window = null;
+        await AvaloniaUiHost.ShowStandaloneWindowAsync(() => window = new FirstRunWindow());
+        return window?.Accepted == true;
+    }
 
     public static bool ShouldShowFor(TurbophraseConfig config)
     {

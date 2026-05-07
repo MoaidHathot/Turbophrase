@@ -53,9 +53,7 @@ public class TrayApplicationContext : ApplicationContext
             // wizard writes turbophrase.json directly; we then re-load.
             if (FirstRunWindow.ShouldShowFor(_config))
             {
-                FirstRunWindow? wizard = null;
-                AvaloniaUiHost.ShowStandaloneWindowAsync(() => wizard = new FirstRunWindow()).GetAwaiter().GetResult();
-                if (wizard?.Accepted == true)
+                if (FirstRunWindow.ShowProviderSetupAsync().GetAwaiter().GetResult())
                 {
                     _config = ConfigurationService.LoadConfiguration();
                     RuntimeLog.Configure(_config.Logging);
@@ -230,6 +228,14 @@ public class TrayApplicationContext : ApplicationContext
         });
     }
 
+    public async Task OpenProviderSetupWindowAsync()
+    {
+        if (await FirstRunWindow.ShowProviderSetupAsync())
+        {
+            ReloadConfiguration();
+        }
+    }
+
     private void ChangeDefaultProvider(string providerName)
     {
         try
@@ -372,6 +378,7 @@ public class TrayApplicationContext : ApplicationContext
         return
         [
             new("Settings", "Configure providers, presets, hotkeys, and behavior.", InvokeAsync: () => RunOnTrayThread(OpenSettingsWindow)),
+            new("Provider Setup", "Reopen the first-run provider and credential setup.", InvokeAsync: () => RunOnTrayThread(OpenProviderSetupWindowAsync)),
             new("Open Config Folder", ConfigurationService.ConfigDirectory, InvokeAsync: () => RunOnTrayThread(OpenConfigFolder)),
             new("Reload Configuration", ConfigurationService.ConfigFilePath, InvokeAsync: () => RunOnTrayThread(ReloadConfiguration)),
             new("Run at Windows startup", startupEnabled ? "Enabled" : "Disabled", Checked: startupEnabled, InvokeAsync: () => RunOnTrayThread(ToggleStartup)),

@@ -164,6 +164,10 @@ static class Program
             case "settings":
                 return await SettingsCommandAsync();
 
+            case "setup":
+            case "provider-setup":
+                return await ProviderSetupCommandAsync();
+
             case "secrets":
                 return SecretsCommand(args.Skip(1).ToArray());
 
@@ -434,6 +438,21 @@ static class Program
         }
     }
 
+    private static async Task<int> ProviderSetupCommandAsync()
+    {
+        try
+        {
+            var saved = await FirstRunWindow.ShowProviderSetupAsync();
+            Console.WriteLine(saved ? "Provider setup saved." : "Provider setup cancelled.");
+            return saved ? 0 : 1;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            return 1;
+        }
+    }
+
     private static int StartupCommand(string[] args)
     {
         if (args.Length == 0 || args[0] == "--status")
@@ -498,6 +517,7 @@ static class Program
               turbophrase startup --enable       Enable run at Windows startup
               turbophrase startup --disable      Disable run at Windows startup
               turbophrase settings               Open the Settings UI
+              turbophrase setup                  Open provider setup wizard
               turbophrase secrets list           List secrets stored in Credential Manager
               turbophrase secrets set <name>     Save a secret (value read from stdin if omitted)
               turbophrase secrets get <name>     Print a stored secret

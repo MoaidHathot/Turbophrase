@@ -732,12 +732,24 @@ public sealed class SettingsWindow : Window
         openConfig.Click += (_, _) => SafeStart(ConfigurationService.ConfigFilePath, isFolder: false);
         var openFolder = new AButton { Content = "Open config folder" };
         openFolder.Click += (_, _) => SafeStart(ConfigurationService.ConfigDirectory, isFolder: true);
+        var providerSetup = new AButton { Content = "Provider setup" };
+        providerSetup.Click += async (_, _) =>
+        {
+            if (await FirstRunWindow.ShowProviderSetupAsync())
+            {
+                LoadConfiguration();
+                ShowSelectedSection();
+                _status.Foreground = Brush("TpSuccessBrush");
+                _status.Text = "Provider setup saved.";
+            }
+        };
         var reset = new AButton { Content = "Reset to defaults" };
         reset.Click += (_, _) =>
         {
             ConfigEditor.ResetToDefaults(ConfigurationService.ConfigFilePath, createBackup: true);
             LoadConfiguration();
             ShowSelectedSection();
+            _status.Foreground = Brush("TpSuccessBrush");
             _status.Text = "Configuration reset to defaults.";
         };
 
@@ -747,7 +759,7 @@ public sealed class SettingsWindow : Window
             ReadOnlyField("Custom config", ConfigurationService.CustomConfigFilePath ?? "(not set)"),
             ReadOnlyField("XDG_CONFIG_HOME", Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") ?? "(not set)"),
             logging,
-            new StackPanel { Orientation = AOrientation.Horizontal, Spacing = 10, Children = { openConfig, openFolder, reset } });
+            new StackPanel { Orientation = AOrientation.Horizontal, Spacing = 10, Children = { openConfig, openFolder, providerSetup, reset } });
     }
 
     private void SaveAndMaybeClose(bool close)
