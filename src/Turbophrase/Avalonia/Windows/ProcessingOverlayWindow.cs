@@ -16,12 +16,13 @@ public sealed class ProcessingOverlayWindow : Window
     private const string BaseText = "Processing";
     private readonly TextBlock _label = new();
     private readonly DispatcherTimer _animationTimer;
+    private string _contextText = BaseText;
     private int _dotCount;
 
     public ProcessingOverlayWindow()
     {
         Title = "Turbophrase processing";
-        Width = 166;
+        Width = 260;
         Height = 46;
         MinWidth = 140;
         MinHeight = 42;
@@ -57,21 +58,25 @@ public sealed class ProcessingOverlayWindow : Window
         _animationTimer.Tick += (_, _) =>
         {
             _dotCount = (_dotCount + 1) % 4;
-            _label.Text = BaseText + new string('.', _dotCount);
+            _label.Text = _contextText + new string('.', _dotCount);
         };
     }
 
-    public void ShowOverlay()
+    public void ShowOverlay(string? context = null, IntPtr sourceWindowHandle = default)
     {
         _dotCount = 0;
-        _label.Text = BaseText;
-        PositionNearBottomRight();
+        _contextText = string.IsNullOrWhiteSpace(context) ? BaseText : $"Processing {context}";
+        _label.Text = _contextText;
+        PositionNearBottomRight(sourceWindowHandle);
         _animationTimer.Start();
 
         if (!IsVisible)
         {
             Show();
         }
+
+        Topmost = false;
+        Topmost = true;
     }
 
     public void HideOverlay()
@@ -80,18 +85,24 @@ public sealed class ProcessingOverlayWindow : Window
         Hide();
     }
 
-    private void PositionNearBottomRight()
+    private void PositionNearBottomRight(IntPtr sourceWindowHandle)
     {
-        var screen = Screens.Primary;
+        var screen = DisplayPlacement.GetScreenForWindow(sourceWindowHandle, Screens)
+            ?? DisplayPlacement.GetScreenNearCursor(Screens)
+            ?? Screens.Primary;
         var workingArea = screen?.WorkingArea;
         if (workingArea == null)
         {
             return;
         }
 
+        var scale = screen?.Scaling is > 0 ? screen.Scaling : 1;
+        var widthPx = (int)Math.Ceiling(Width * scale);
+        var heightPx = (int)Math.Ceiling(Height * scale);
+
         Position = new PixelPoint(
-            workingArea.Value.Right - (int)Math.Ceiling(Width) - 18,
-            workingArea.Value.Bottom - (int)Math.Ceiling(Height) - 18);
+            workingArea.Value.Right - widthPx - 18,
+            workingArea.Value.Bottom - heightPx - 18);
     }
 
     private static IBrush Brush(string key) => AApplication.Current?.FindResource(key) as IBrush ?? ABrushes.Transparent;

@@ -25,6 +25,7 @@ public sealed class PromptCommandWindow : Window
     private readonly TextBlock _statusText;
     private readonly AButton _runButton;
     private bool _activateWhenOpened;
+    private bool _captureReady;
 
     public PromptCommandWindow(IEnumerable<string> providers, string defaultProvider)
     {
@@ -52,6 +53,7 @@ public sealed class PromptCommandWindow : Window
             PlaceholderText = "Rewrite this as a concise update, translate it, make it friendlier..."
         };
         _promptBox.KeyDown += OnPromptBoxKeyDown;
+        _promptBox.TextChanged += (_, _) => UpdateRunState();
 
         _providerBox = new AComboBox
         {
@@ -76,6 +78,7 @@ public sealed class PromptCommandWindow : Window
             MinWidth = 96
         };
         _runButton.Click += (_, _) => Submit();
+        UpdateRunState();
 
         Content = BuildContent();
         Opened += (_, _) =>
@@ -97,20 +100,26 @@ public sealed class PromptCommandWindow : Window
 
     public void SetCapturePending()
     {
+        _captureReady = false;
         _statusText.Foreground = Brush("TpMutedTextBrush");
         _statusText.Text = "Capturing selected text...";
+        UpdateRunState();
     }
 
     public void SetCaptureReady()
     {
+        _captureReady = true;
         _statusText.Foreground = Brush("TpMutedTextBrush");
         _statusText.Text = "Ctrl+Enter runs. Ctrl+Up/Down changes provider. Alt+1-9 jumps provider. Esc cancels.";
+        UpdateRunState();
     }
 
     public void SetCaptureFailed(string message)
     {
+        _captureReady = false;
         _statusText.Foreground = Brush("TpDangerBrush");
         _statusText.Text = message;
+        UpdateRunState();
     }
 
     public void ActivateForInput()
@@ -229,7 +238,10 @@ public sealed class PromptCommandWindow : Window
 
         if (e.Key == Key.Enter && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
-            Submit();
+            if (_runButton.IsEnabled)
+            {
+                Submit();
+            }
             e.Handled = true;
             return;
         }
@@ -290,9 +302,24 @@ public sealed class PromptCommandWindow : Window
     private void Submit()
     {
         PromptText = (_promptBox.Text ?? string.Empty).Trim();
+        if (!_captureReady || string.IsNullOrWhiteSpace(PromptText))
+        {
+            _statusText.Foreground = Brush("TpDangerBrush");
+            _statusText.Text = !_captureReady
+                ? "Text capture must succeed before the prompt can run."
+                : "Prompt cannot be empty.";
+            UpdateRunState();
+            return;
+        }
+
         SelectedProvider = _providerBox.SelectedItem as string;
         Accepted = true;
         Close();
+    }
+
+    private void UpdateRunState()
+    {
+        _runButton.IsEnabled = _captureReady && !string.IsNullOrWhiteSpace(_promptBox.Text);
     }
 
     private void Cancel() => Close();

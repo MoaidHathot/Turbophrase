@@ -1,11 +1,13 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Turbophrase.Core.Configuration;
 using Turbophrase.Services;
 using AApplication = Avalonia.Application;
@@ -16,6 +18,7 @@ using AComboBox = Avalonia.Controls.ComboBox;
 using AControl = Avalonia.Controls.Control;
 using ACheckBox = Avalonia.Controls.CheckBox;
 using AFontFamily = Avalonia.Media.FontFamily;
+using AKeyEventArgs = Avalonia.Input.KeyEventArgs;
 using AListBox = Avalonia.Controls.ListBox;
 using ATextBox = Avalonia.Controls.TextBox;
 using AThickness = Avalonia.Thickness;
@@ -52,12 +55,14 @@ public sealed class SettingsWindow : Window
     private readonly TextBlock _sectionSubtitle = new() { Classes = { "muted" }, FontSize = 13 };
     private readonly AButton _saveButton = new() { Classes = { "primary" }, Content = "Save", MinWidth = 96 };
     private readonly AButton _applyButton = new() { Content = "Apply", MinWidth = 96, IsEnabled = false };
+    private readonly AButton _closeButton;
 
     private readonly ObservableCollection<ProviderEntry> _providers = new();
     private readonly ObservableCollection<PresetEntry> _presets = new();
     private readonly ObservableCollection<HotkeyBinding> _hotkeys = new();
     private readonly ObservableCollection<HotkeyBinding> _pickerActions = new();
     private readonly ObservableCollection<PickerEntry> _pickerRows = new();
+    private readonly HashSet<string> _hotkeysRegisteredAtLoad = new(StringComparer.OrdinalIgnoreCase);
 
     private string _defaultProvider = string.Empty;
     private bool _runAtStartup;
@@ -66,6 +71,13 @@ public sealed class SettingsWindow : Window
     private LoggingSettings _logging = new();
     private bool _dirty;
     private bool _loading;
+    private bool _forceClose;
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
+
+    private const int VK_LWIN = 0x5B;
+    private const int VK_RWIN = 0x5C;
 
     public SettingsWindow()
     {
@@ -77,12 +89,17 @@ public sealed class SettingsWindow : Window
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Background = AApplication.Current?.FindResource("TpAppBackground") as IBrush ?? Brush("TpVoidBrush");
 
+        _closeButton = new AButton { Content = "Close", MinWidth = 96, Command = new RelayCommand(RequestClose) };
+
         _saveButton.Click += (_, _) => SaveAndMaybeClose(close: true);
         _applyButton.Click += (_, _) => SaveAndMaybeClose(close: false);
+        Closing += OnClosing;
+        KeyDown += OnSettingsKeyDown;
 
         Content = BuildShell();
         LoadConfiguration();
         _nav.SelectedIndex = 0;
+        SetDirty(false);
     }
 
     private AControl BuildShell()
@@ -181,7 +198,7 @@ public sealed class SettingsWindow : Window
                         {
                             _applyButton,
                             _saveButton,
-                            new AButton { Content = "Close", MinWidth = 96, Command = new RelayCommand(() => Close()) }
+                            _closeButton
                         }
                     }
                 }
@@ -223,6 +240,9 @@ public sealed class SettingsWindow : Window
                         Endpoint = editor.GetProviderRawField(name, "endpoint") ?? string.Empty,
                         Model = editor.GetProviderRawField(name, "model") ?? string.Empty,
                         DeploymentName = editor.GetProviderRawField(name, "deploymentName") ?? string.Empty,
+                        SaveApiKeyInCredMan = ShouldDefaultToCredMan(
+                            editor.GetProviderRawField(name, "type") ?? string.Empty,
+                            editor.GetProviderRawField(name, "apiKey")),
                     });
                 }
             }
@@ -239,6 +259,7 @@ public sealed class SettingsWindow : Window
                         Endpoint = provider.Endpoint ?? string.Empty,
                         Model = provider.Model ?? string.Empty,
                         DeploymentName = provider.DeploymentName ?? string.Empty,
+                        SaveApiKeyInCredMan = ShouldDefaultToCredMan(provider.Type, provider.ApiKey),
                     });
                 }
             }
@@ -259,9 +280,14 @@ public sealed class SettingsWindow : Window
             }
 
             _hotkeys.Clear();
+            _hotkeysRegisteredAtLoad.Clear();
             foreach (var hotkey in config.Hotkeys)
             {
                 _hotkeys.Add(Clone(hotkey));
+                if (GlobalHotkeyService.TryNormalizeHotkey(hotkey.Keys, out var normalizedHotkey, out _))
+                {
+                    _hotkeysRegisteredAtLoad.Add(normalizedHotkey);
+                }
             }
 
             _pickerActions.Clear();
@@ -278,6 +304,40 @@ public sealed class SettingsWindow : Window
             _loading = false;
         }
     }
+
+    private void OnSettingsKeyDown(object? sender, AKeyEventArgs e)
+    {
+        if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            SaveAndMaybeClose(close: false);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Escape)
+        {
+            RequestClose();
+            e.Handled = true;
+        }
+    }
+
+    private async void OnClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (_forceClose || !_dirty)
+        {
+            return;
+        }
+
+        e.Cancel = true;
+        var result = await ConfirmAsync("Discard Unsaved Changes", "Close Settings and discard unsaved changes?", "Discard", "Keep editing");
+        if (result)
+        {
+            _forceClose = true;
+            Close();
+        }
+    }
+
+    private void RequestClose() => Close();
 
     private void ShowSelectedSection()
     {
@@ -366,7 +426,7 @@ public sealed class SettingsWindow : Window
         var add = new AButton { Classes = { "primary" }, Content = "Add provider" };
         add.Click += (_, _) =>
         {
-            var entry = new ProviderEntry { Name = UniqueName("provider", _providers.Select(p => p.Name)), Type = "openai" };
+            var entry = new ProviderEntry { Name = UniqueName("provider", _providers.Select(p => p.Name)), Type = "openai", SaveApiKeyInCredMan = true };
             _providers.Add(entry);
             if (string.IsNullOrWhiteSpace(_defaultProvider))
             {
@@ -377,15 +437,17 @@ public sealed class SettingsWindow : Window
         };
 
         var remove = new AButton { Content = "Remove" };
-        remove.Click += (_, _) =>
+        remove.Click += async (_, _) =>
         {
-            if (list.SelectedItem is ProviderEntry entry)
+            if (list.SelectedItem is ProviderEntry entry
+                && await ConfirmAsync("Remove Provider", $"Remove provider '{entry.Name}'?", "Remove", "Cancel"))
             {
                 _providers.Remove(entry);
                 if (_defaultProvider == entry.Name)
                 {
                     _defaultProvider = _providers.FirstOrDefault()?.Name ?? string.Empty;
                 }
+                RefreshList(list);
                 MarkDirty();
             }
         };
@@ -409,8 +471,14 @@ public sealed class SettingsWindow : Window
         grid.Children.Add(left);
         Grid.SetColumn(detailHost, 1);
         grid.Children.Add(detailHost);
-        list.SelectedIndex = _providers.Count > 0 ? 0 : -1;
-        RenderDetail();
+        if (_providers.Count > 0)
+        {
+            list.SelectedIndex = 0;
+        }
+        else
+        {
+            RenderDetail();
+        }
         return grid;
     }
 
@@ -425,15 +493,19 @@ public sealed class SettingsWindow : Window
         });
 
         var type = new AComboBox { ItemsSource = ProviderTypes, SelectedItem = entry.Type, MinWidth = 220 };
-        type.SelectionChanged += (_, _) => { entry.Type = type.SelectedItem as string ?? string.Empty; MarkDirty(); };
+        type.SelectionChanged += (_, _) =>
+        {
+            var selectedType = type.SelectedItem as string;
+            if (string.IsNullOrWhiteSpace(selectedType)
+                || string.Equals(entry.Type, selectedType, StringComparison.Ordinal))
+            {
+                return;
+            }
 
-        var apiKey = Text(entry.ApiKey, text => { entry.ApiKey = text; MarkDirty(); });
-        var saveSecret = new ACheckBox { Content = "Save API key in Windows Credential Manager", IsChecked = entry.SaveApiKeyInCredMan };
-        saveSecret.IsCheckedChanged += (_, _) => { entry.SaveApiKeyInCredMan = saveSecret.IsChecked == true; MarkDirty(); };
-
-        var endpoint = Text(entry.Endpoint, text => { entry.Endpoint = text; MarkDirty(); });
-        var model = Text(entry.Model, text => { entry.Model = text; MarkDirty(); });
-        var deployment = Text(entry.DeploymentName, text => { entry.DeploymentName = text; MarkDirty(); });
+            entry.Type = selectedType;
+            detailHost.Content = BuildProviderDetail(entry, list, detailHost);
+            MarkDirty();
+        };
 
         var setDefault = new AButton { Content = entry.Name == _defaultProvider ? "Default provider" : "Set as default" };
         setDefault.Click += (_, _) =>
@@ -463,16 +535,103 @@ public sealed class SettingsWindow : Window
             test.IsEnabled = true;
         };
 
-        return CardStack(
-            SectionHeader(entry.Name, entry.Name == _defaultProvider ? "Currently used by default." : "Provider configuration."),
+        var fields = new List<AControl>
+        {
+            SectionHeader(entry.Name, entry.Name == _defaultProvider ? "Currently used by default." : ProviderHint(entry.Type)),
             Field("Name", name),
             Field("Type", type),
-            Field("API key", apiKey),
-            saveSecret,
-            Field("Endpoint", endpoint),
-            Field("Model", model),
-            Field("Deployment name", deployment),
-            new StackPanel { Orientation = AOrientation.Horizontal, Spacing = 10, Children = { setDefault, test, testResult } });
+        };
+
+        if (RequiresApiKey(entry.Type))
+        {
+            fields.Add(BuildApiKeyField(entry));
+        }
+
+        if (RequiresEndpoint(entry.Type))
+        {
+            fields.Add(Field("Endpoint", Text(entry.Endpoint, text => { entry.Endpoint = text; MarkDirty(); }), EndpointHint(entry.Type)));
+        }
+
+        if (UsesModel(entry.Type))
+        {
+            fields.Add(Field(entry.Type == "azure-openai" ? "Model" : "Model", Text(entry.Model, text => { entry.Model = text; MarkDirty(); }), ModelHint(entry.Type)));
+        }
+
+        if (entry.Type == "azure-openai")
+        {
+            fields.Add(Field("Deployment name", Text(entry.DeploymentName, text => { entry.DeploymentName = text; MarkDirty(); }), "Required unless your full endpoint includes the deployment."));
+        }
+
+        fields.Add(new StackPanel { Orientation = AOrientation.Horizontal, Spacing = 10, Children = { setDefault, test, testResult } });
+        return CardStack(fields.ToArray());
+    }
+
+    private AControl BuildApiKeyField(ProviderEntry entry)
+    {
+        var storedReference = entry.ApiKey.StartsWith(ConfigurationService.CredManPrefix, StringComparison.Ordinal)
+            ? entry.ApiKey[ConfigurationService.CredManPrefix.Length..]
+            : null;
+        var envReference = TryGetSingleEnvReference(entry.ApiKey);
+        var apiKey = new ATextBox
+        {
+            Text = storedReference == null ? entry.ApiKey : string.Empty,
+            PasswordChar = '*',
+            PlaceholderText = storedReference == null ? "Paste API key or ${ENV_VAR}" : "Stored in Windows Credential Manager",
+            IsEnabled = storedReference == null,
+        };
+        var apiKeyInitialized = false;
+        apiKey.AttachedToVisualTree += (_, _) => apiKeyInitialized = true;
+        apiKey.TextChanged += (_, _) =>
+        {
+            if (apiKeyInitialized)
+            {
+                entry.ApiKey = apiKey.Text ?? string.Empty;
+                MarkDirty();
+            }
+        };
+
+        var showKey = new ACheckBox { Content = "Show key", IsEnabled = storedReference == null };
+        showKey.IsCheckedChanged += (_, _) => apiKey.PasswordChar = showKey.IsChecked == true ? '\0' : '*';
+        var saveSecret = new ACheckBox { Content = "Save in Windows Credential Manager", IsChecked = entry.SaveApiKeyInCredMan || storedReference != null };
+        saveSecret.IsCheckedChanged += (_, _) => { entry.SaveApiKeyInCredMan = saveSecret.IsChecked == true; MarkDirty(); };
+
+        var replace = new AButton { Content = storedReference == null ? "Clear" : "Replace key" };
+        replace.Click += (_, _) =>
+        {
+            entry.ApiKey = string.Empty;
+            entry.SaveApiKeyInCredMan = true;
+            apiKey.IsEnabled = true;
+            apiKey.Text = string.Empty;
+            apiKey.PlaceholderText = "Paste replacement API key or ${ENV_VAR}";
+            showKey.IsEnabled = true;
+            saveSecret.IsChecked = true;
+            MarkDirty();
+        };
+
+        var status = storedReference != null
+            ? $"Stored as {SecretsStore.GetTargetName(storedReference)}. Use Replace key to update it."
+            : envReference != null
+                ? Environment.GetEnvironmentVariable(envReference) is { Length: > 0 }
+                    ? $"Environment variable {envReference} is available."
+                    : $"Environment variable {envReference} is not set for this process."
+                : "Credential Manager storage keeps the key out of turbophrase.json.";
+
+        return Field("API key", new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                new Grid
+                {
+                    ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+                    ColumnSpacing = 10,
+                    Children = { apiKey, WithColumn(showKey, 1) }
+                },
+                saveSecret,
+                new TextBlock { Classes = { "muted" }, Text = status, FontSize = 12 },
+                replace
+            }
+        });
     }
 
     private AControl BuildPresetsPage()
@@ -523,12 +682,14 @@ public sealed class SettingsWindow : Window
         };
 
         var remove = new AButton { Content = "Remove" };
-        remove.Click += (_, _) =>
+        remove.Click += async (_, _) =>
         {
-            if (list.SelectedItem is PresetEntry entry)
+            if (list.SelectedItem is PresetEntry entry
+                && await ConfirmAsync("Remove Preset", $"Remove preset '{entry.Name}'?", "Remove", "Cancel"))
             {
                 _presets.Remove(entry);
                 RebuildPickerRows();
+                RefreshList(list);
                 MarkDirty();
             }
         };
@@ -565,9 +726,10 @@ public sealed class SettingsWindow : Window
             entry.Key = text.Trim();
             RenamePresetReferences(previousKey, entry.Key);
             RebuildPickerRows();
+            RefreshList(list);
             MarkDirty();
         });
-        var name = Text(entry.Name, text => { entry.Name = text; RebuildPickerRows(); MarkDirty(); });
+        var name = Text(entry.Name, text => { entry.Name = text; RebuildPickerRows(); RefreshList(list); MarkDirty(); });
         var prompt = Text(entry.SystemPrompt, text => { entry.SystemPrompt = text; MarkDirty(); }, multi: true, minHeight: 220);
         var provider = new AComboBox { ItemsSource = new[] { "" }.Concat(ProviderNames()).ToList(), SelectedItem = entry.Provider, MinWidth = 220 };
         provider.SelectionChanged += (_, _) => { entry.Provider = provider.SelectedItem as string ?? string.Empty; MarkDirty(); };
@@ -589,7 +751,7 @@ public sealed class SettingsWindow : Window
     {
         var list = new AListBox { ItemsSource = _hotkeys, MinWidth = 260, MaxWidth = 300 };
         var detailHost = new ContentControl();
-        void RenderDetail() => detailHost.Content = list.SelectedItem is HotkeyBinding h ? BuildHotkeyDetail(h) : EmptyState("No hotkey selected.");
+        void RenderDetail() => detailHost.Content = list.SelectedItem is HotkeyBinding h ? BuildHotkeyDetail(h, list) : EmptyState("No hotkey selected.");
         list.SelectionChanged += (_, _) => RenderDetail();
 
         var add = new AButton { Classes = { "primary" }, Content = "Add hotkey" };
@@ -602,7 +764,16 @@ public sealed class SettingsWindow : Window
             MarkDirty();
         };
         var remove = new AButton { Content = "Remove" };
-        remove.Click += (_, _) => { if (list.SelectedItem is HotkeyBinding h) { _hotkeys.Remove(h); RebuildPickerRows(); MarkDirty(); } };
+        remove.Click += async (_, _) =>
+        {
+            if (list.SelectedItem is HotkeyBinding h
+                && await ConfirmAsync("Remove Hotkey", $"Remove hotkey '{h.Keys}'?", "Remove", "Cancel"))
+            {
+                _hotkeys.Remove(h);
+                RebuildPickerRows();
+                MarkDirty();
+            }
+        };
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("300,*"), ColumnSpacing = 14 };
         grid.Children.Add(new Border
@@ -626,9 +797,19 @@ public sealed class SettingsWindow : Window
         return grid;
     }
 
-    private AControl BuildHotkeyDetail(HotkeyBinding hotkey)
+    private AControl BuildHotkeyDetail(HotkeyBinding hotkey, AListBox list)
     {
-        var keys = Text(hotkey.Keys, text => { hotkey.Keys = text; MarkDirty(); });
+        var keysStatus = new TextBlock { Classes = { "muted" }, FontSize = 12 };
+        var keys = Text(hotkey.Keys, text =>
+        {
+            hotkey.Keys = text;
+            UpdateHotkeyStatus(text, keysStatus);
+            RefreshList(list);
+            MarkDirty();
+        });
+        UpdateHotkeyStatus(hotkey.Keys, keysStatus);
+        var record = new AButton { Content = "Record shortcut" };
+        record.Click += (_, _) => StartHotkeyRecording(keys, keysStatus, text => { hotkey.Keys = text; MarkDirty(); });
         var action = new AComboBox { ItemsSource = new[] { "preset", "custom-prompt", "preset-picker" }, SelectedItem = string.IsNullOrWhiteSpace(hotkey.Action) ? "preset" : hotkey.Action, MinWidth = 220 };
         action.SelectionChanged += (_, _) => { hotkey.Action = action.SelectedItem as string; RebuildPickerRows(); MarkDirty(); };
         var preset = new AComboBox { ItemsSource = _presets.Select(p => p.Key).ToList(), SelectedItem = hotkey.Preset, MinWidth = 220 };
@@ -643,7 +824,20 @@ public sealed class SettingsWindow : Window
 
         return CardStack(
             SectionHeader(hotkey.Keys, "Global shortcut binding."),
-            Field("Keys", keys, "Example: Ctrl+Shift+G or Ctrl+F7."),
+            Field("Keys", new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new Grid
+                    {
+                        ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+                        ColumnSpacing = 10,
+                        Children = { keys, WithColumn(record, 1) }
+                    },
+                    keysStatus
+                }
+            }, "Example: Ctrl+Alt+T or Ctrl+F7."),
             Field("Action", action),
             Field("Preset", preset),
             Field("Display name", name),
@@ -657,11 +851,13 @@ public sealed class SettingsWindow : Window
     {
         RebuildPickerRows();
         var list = new AListBox { ItemsSource = _pickerRows, MinHeight = 360 };
+        var detailHost = new ContentControl();
         var include = new ACheckBox { Content = "Show selected item in picker" };
         void RefreshInclude()
         {
             include.IsEnabled = list.SelectedItem is PickerEntry;
             include.IsChecked = (list.SelectedItem as PickerEntry)?.IncludeInPicker;
+            detailHost.Content = list.SelectedItem is PickerEntry row ? BuildPickerEntryDetail(row, list) : EmptyState("No picker item selected.");
         }
         list.SelectionChanged += (_, _) => RefreshInclude();
         include.IsCheckedChanged += (_, _) =>
@@ -692,9 +888,10 @@ public sealed class SettingsWindow : Window
         };
 
         var removeAction = new AButton { Content = "Remove picker-only action" };
-        removeAction.Click += (_, _) =>
+        removeAction.Click += async (_, _) =>
         {
-            if (list.SelectedItem is PickerEntry { Source: "Picker action", Binding: { } binding })
+            if (list.SelectedItem is PickerEntry { Source: "Picker action", Binding: { } binding }
+                && await ConfirmAsync("Remove Picker Action", $"Remove picker action '{DescribeHotkey(binding)}'?", "Remove", "Cancel"))
             {
                 _pickerActions.Remove(binding);
                 RebuildPickerRows();
@@ -708,9 +905,39 @@ public sealed class SettingsWindow : Window
         RefreshInclude();
         return CardStack(
             new TextBlock { Classes = { "muted" }, Text = "Use this list to control what the command palette shows and in what order." },
-            list,
+            new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("*,*"),
+                ColumnSpacing = 14,
+                Children = { list, WithColumn(detailHost, 1) }
+            },
             include,
             new StackPanel { Orientation = AOrientation.Horizontal, Spacing = 10, Children = { up, down, addAction, removeAction } });
+    }
+
+    private AControl BuildPickerEntryDetail(PickerEntry row, AListBox list)
+    {
+        if (row.Binding == null)
+        {
+            return EmptyState("Preset picker items are edited on the Presets page.");
+        }
+
+        var binding = row.Binding;
+        var name = Text(binding.Name ?? string.Empty, text =>
+        {
+            binding.Name = string.IsNullOrWhiteSpace(text) ? null : text;
+            RebuildPickerRowsAndRestoreSelection(list, binding);
+            MarkDirty();
+        });
+        var provider = new AComboBox { ItemsSource = new[] { "" }.Concat(ProviderNames()).ToList(), SelectedItem = binding.Provider ?? string.Empty, MinWidth = 220 };
+        provider.SelectionChanged += (_, _) => { binding.Provider = string.IsNullOrWhiteSpace(provider.SelectedItem as string) ? null : provider.SelectedItem as string; MarkDirty(); };
+        var template = Text(binding.SystemPromptTemplate ?? string.Empty, text => { binding.SystemPromptTemplate = string.IsNullOrWhiteSpace(text) ? null : text; MarkDirty(); }, multi: true, minHeight: 150);
+
+        return CardStack(
+            SectionHeader(DescribeHotkey(binding), row.Source == "Picker action" ? "Picker-only custom prompt action." : "Hotkey item shown in picker."),
+            Field("Display name", name),
+            Field("Provider override", provider),
+            Field("Prompt template", template, "Leave empty to use the global custom prompt template."));
     }
 
     private AControl BuildNotificationsPage()
@@ -744,13 +971,18 @@ public sealed class SettingsWindow : Window
             }
         };
         var reset = new AButton { Content = "Reset to defaults" };
-        reset.Click += (_, _) =>
+        reset.Click += async (_, _) =>
         {
-            ConfigEditor.ResetToDefaults(ConfigurationService.ConfigFilePath, createBackup: true);
+            if (!await ConfirmAsync("Reset Configuration", "Reset all Turbophrase settings to defaults? A backup will be created first.", "Reset", "Cancel"))
+            {
+                return;
+            }
+
+            var backup = ConfigEditor.ResetToDefaults(ConfigurationService.ConfigFilePath, createBackup: true);
             LoadConfiguration();
             ShowSelectedSection();
             _status.Foreground = Brush("TpSuccessBrush");
-            _status.Text = "Configuration reset to defaults.";
+            _status.Text = backup == null ? "Configuration reset to defaults." : $"Configuration reset. Backup: {backup}";
         };
 
         return CardStack(
@@ -864,6 +1096,7 @@ public sealed class SettingsWindow : Window
             _status.Text = $"Saved {DateTime.Now:HH:mm:ss}";
             if (close)
             {
+                _forceClose = true;
                 Close();
             }
         }
@@ -920,13 +1153,22 @@ public sealed class SettingsWindow : Window
         if (_providers.GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase).Any(g => g.Count() > 1)) return "Provider names must be unique.";
         foreach (var provider in _providers)
         {
-            if (RequiresApiKey(provider.Type) && IsUnresolvedOrBlank(provider.ApiKey)) return $"Provider '{provider.Name}' needs a resolved API key.";
-            if (provider.Type == "azure-openai" && IsUnresolvedOrBlank(provider.Endpoint)) return $"Provider '{provider.Name}' needs a resolved Azure endpoint.";
-            if (provider.Type == "azure-openai" && IsUnresolvedOrBlank(provider.DeploymentName) && IsUnresolvedOrBlank(provider.Model)) return $"Provider '{provider.Name}' needs an Azure deployment name.";
+            if (RequiresApiKey(provider.Type) && !HasResolvedValue(provider.ApiKey)) { _nav.SelectedItem = "Providers"; return $"Provider '{provider.Name}' needs a resolved API key."; }
+            if (RequiresEndpoint(provider.Type) && !HasResolvedValue(provider.Endpoint)) { _nav.SelectedItem = "Providers"; return $"Provider '{provider.Name}' needs a resolved endpoint."; }
+            if (provider.Type == "azure-openai" && !HasResolvedValue(provider.DeploymentName) && !HasResolvedValue(provider.Model)) { _nav.SelectedItem = "Providers"; return $"Provider '{provider.Name}' needs an Azure deployment name."; }
         }
         if (_presets.Any(p => string.IsNullOrWhiteSpace(p.Key) || string.IsNullOrWhiteSpace(p.Name) || string.IsNullOrWhiteSpace(p.SystemPrompt))) return "Every preset needs a key, name, and prompt.";
         if (_presets.GroupBy(p => p.Key, StringComparer.OrdinalIgnoreCase).Any(g => g.Count() > 1)) return "Preset keys must be unique.";
-        if (_hotkeys.Any(h => string.IsNullOrWhiteSpace(h.Keys))) return "Every hotkey needs a key combination.";
+        foreach (var hotkey in _hotkeys)
+        {
+            if (!GlobalHotkeyService.TryNormalizeHotkey(hotkey.Keys, out _, out var error)) { _nav.SelectedItem = "Hotkeys"; return $"Hotkey '{hotkey.Keys}' is invalid: {error}"; }
+        }
+
+        var duplicateHotkey = _hotkeys
+            .Select(h => GlobalHotkeyService.TryNormalizeHotkey(h.Keys, out var normalized, out _) ? normalized : h.Keys)
+            .GroupBy(h => h, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(g => g.Count() > 1);
+        if (duplicateHotkey != null) { _nav.SelectedItem = "Hotkeys"; return $"Hotkey '{duplicateHotkey.Key}' is assigned more than once."; }
         return null;
     }
 
@@ -945,8 +1187,36 @@ public sealed class SettingsWindow : Window
 
     private static bool RequiresApiKey(string type) => type is "openai" or "azure-openai" or "anthropic";
 
-    private static bool IsUnresolvedOrBlank(string? value) => string.IsNullOrWhiteSpace(value)
-        || value.TrimStart().StartsWith("${", StringComparison.Ordinal);
+    private static bool ShouldDefaultToCredMan(string? providerType, string? apiKey)
+    {
+        if (!RequiresApiKey(providerType ?? string.Empty))
+        {
+            return false;
+        }
+
+        return !string.IsNullOrWhiteSpace(apiKey)
+            && !apiKey.TrimStart().StartsWith("${", StringComparison.Ordinal);
+    }
+
+    private static bool RequiresEndpoint(string type) => type is "azure-openai" or "ollama";
+
+    private static bool UsesModel(string type) => type is "openai" or "azure-openai" or "anthropic" or "ollama" or "copilot";
+
+    private static bool HasResolvedValue(string? value)
+    {
+        var normalized = Normalize(value);
+        if (normalized == null)
+        {
+            return false;
+        }
+
+        var resolved = ConfigurationService.ResolveSecretReference(normalized);
+        return !string.IsNullOrWhiteSpace(resolved)
+            && !string.Equals(resolved, normalized, StringComparison.Ordinal)
+                ? true
+                : !normalized.TrimStart().StartsWith("${", StringComparison.Ordinal)
+                    && !normalized.StartsWith(ConfigurationService.CredManPrefix, StringComparison.Ordinal);
+    }
 
     private IDictionary<string, string?> ProviderFieldValues(ProviderEntry provider) => new Dictionary<string, string?>
     {
@@ -956,6 +1226,38 @@ public sealed class SettingsWindow : Window
         ["model"] = Normalize(provider.Model),
         ["deploymentName"] = Normalize(provider.DeploymentName),
     };
+
+    private static string ProviderHint(string type) => type switch
+    {
+        "copilot" => "Uses your signed-in GitHub Copilot account. No API key is required.",
+        "ollama" => "Uses a local Ollama service.",
+        "azure-openai" => "Uses Azure OpenAI or a Foundry chat-completions endpoint.",
+        "anthropic" => "Uses Anthropic Claude models.",
+        _ => "Uses OpenAI-compatible hosted models.",
+    };
+
+    private static string EndpointHint(string type) => type switch
+    {
+        "ollama" => "Usually http://localhost:11434.",
+        "azure-openai" => "Resource endpoint or full Foundry chat-completions URL.",
+        _ => "Provider endpoint.",
+    };
+
+    private static string ModelHint(string type) => type switch
+    {
+        "ollama" => "A local model that has been pulled in Ollama.",
+        "copilot" => "Optional Copilot model override.",
+        "azure-openai" => "Optional when deployment name is set separately.",
+        _ => "Model name to request from this provider.",
+    };
+
+    private static string? TryGetSingleEnvReference(string? value)
+    {
+        var trimmed = value?.Trim();
+        return trimmed != null && trimmed.StartsWith("${", StringComparison.Ordinal) && trimmed.EndsWith("}", StringComparison.Ordinal)
+            ? trimmed[2..^1]
+            : null;
+    }
 
     private void RebuildPickerRows()
     {
@@ -973,6 +1275,14 @@ public sealed class SettingsWindow : Window
             _pickerRows.Add(new PickerEntry("Picker action", action.Name ?? action.Action ?? "Action", DescribeHotkey(action), action.IncludeInPicker, action.PickerOrder ?? 0, null, action));
         }
         SortPickerRows();
+    }
+
+    private void RebuildPickerRowsAndRestoreSelection(AListBox list, HotkeyBinding binding)
+    {
+        RebuildPickerRows();
+        list.ItemsSource = null;
+        list.ItemsSource = _pickerRows;
+        list.SelectedItem = _pickerRows.FirstOrDefault(row => ReferenceEquals(row.Binding, binding));
     }
 
     private void SortPickerRows()
@@ -1044,7 +1354,7 @@ public sealed class SettingsWindow : Window
     {
         _dirty = dirty;
         _applyButton.IsEnabled = dirty;
-        _saveButton.Content = dirty ? "Save" : "Close";
+        _saveButton.IsEnabled = dirty;
         if (dirty)
         {
             _status.Foreground = Brush("TpMutedTextBrush");
@@ -1055,6 +1365,120 @@ public sealed class SettingsWindow : Window
             _status.Text = string.Empty;
         }
     }
+
+    private void UpdateHotkeyStatus(string text, TextBlock status)
+    {
+        if (!GlobalHotkeyService.TryNormalizeHotkey(text, out var normalized, out var error))
+        {
+            status.Foreground = Brush("TpDangerBrush");
+            status.Text = error ?? "Invalid shortcut.";
+            return;
+        }
+
+        var duplicate = _hotkeys.Count(h => GlobalHotkeyService.TryNormalizeHotkey(h.Keys, out var hNormalized, out _)
+            && string.Equals(hNormalized, normalized, StringComparison.OrdinalIgnoreCase)) > 1;
+        if (duplicate)
+        {
+            status.Foreground = Brush("TpDangerBrush");
+            status.Text = $"{normalized} is assigned more than once.";
+            return;
+        }
+
+        if (_hotkeysRegisteredAtLoad.Contains(normalized))
+        {
+            status.Foreground = Brush("TpSuccessBrush");
+            status.Text = $"{normalized} is registered by Turbophrase.";
+            return;
+        }
+
+        if (!GlobalHotkeyService.IsHotkeyAvailable(normalized, out var availabilityError))
+        {
+            status.Foreground = Brush("TpDangerBrush");
+            status.Text = availabilityError ?? "Windows could not register this shortcut.";
+            return;
+        }
+
+        status.Foreground = Brush("TpSuccessBrush");
+        status.Text = $"{normalized} is valid and currently available.";
+    }
+
+    private void StartHotkeyRecording(ATextBox target, TextBlock status, Action<string> changed)
+    {
+        var originalText = target.Text ?? string.Empty;
+        status.Foreground = Brush("TpMutedTextBrush");
+        status.Text = "Press the shortcut now. Esc cancels.";
+        target.Text = string.Empty;
+        target.PlaceholderText = "Press shortcut...";
+
+        void Handler(object? sender, AKeyEventArgs e)
+        {
+            e.Handled = true;
+            if (e.Key == Key.Escape)
+            {
+                target.KeyDown -= Handler;
+                target.Text = originalText;
+                changed(originalText);
+                UpdateHotkeyStatus(target.Text ?? string.Empty, status);
+                return;
+            }
+
+            var normalized = BuildHotkeyFromKeyEvent(e);
+            if (normalized == null)
+            {
+                return;
+            }
+
+            target.Text = normalized;
+            target.PlaceholderText = string.Empty;
+            changed(normalized);
+            target.KeyDown -= Handler;
+            UpdateHotkeyStatus(normalized, status);
+        }
+
+        target.Focus();
+        target.KeyDown += Handler;
+    }
+
+    private static string? BuildHotkeyFromKeyEvent(AKeyEventArgs e)
+    {
+        if (e.Key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin)
+        {
+            return null;
+        }
+
+        var parts = new List<string>();
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control)) parts.Add("Ctrl");
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Alt)) parts.Add("Alt");
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Shift)) parts.Add("Shift");
+        if (IsWinPressed()) parts.Add("Win");
+        parts.Add(KeyToHotkeyName(e.Key));
+        return string.Join('+', parts);
+    }
+
+    private static bool IsWinPressed() => (GetAsyncKeyState(VK_LWIN) & 0x8000) != 0
+        || (GetAsyncKeyState(VK_RWIN) & 0x8000) != 0;
+
+    private static string KeyToHotkeyName(Key key) => key switch
+    {
+        >= Key.A and <= Key.Z => key.ToString(),
+        >= Key.D0 and <= Key.D9 => key.ToString()[1..],
+        Key.Space => "Space",
+        Key.Escape => "Escape",
+        Key.PageUp => "PageUp",
+        Key.PageDown => "PageDown",
+        Key.OemMinus => "Minus",
+        Key.OemPlus => "Equals",
+        Key.OemComma => "Comma",
+        Key.OemPeriod => "Period",
+        Key.OemQuestion => "Slash",
+        Key.OemTilde => "Backtick",
+        Key.OemOpenBrackets => "LeftBracket",
+        Key.OemCloseBrackets => "RightBracket",
+        Key.OemBackslash => "Backslash",
+        Key.OemQuotes => "Quote",
+        Key.OemSemicolon => "Semicolon",
+        _ => key.ToString(),
+    };
 
     private StackPanel CardStack(params AControl[] children)
     {
@@ -1109,6 +1533,7 @@ public sealed class SettingsWindow : Window
 
     private static ATextBox Text(string value, Action<string> changed, bool multi = false, double minHeight = 0)
     {
+        var initialized = false;
         var box = new ATextBox
         {
             Text = value,
@@ -1116,7 +1541,14 @@ public sealed class SettingsWindow : Window
             TextWrapping = multi ? TextWrapping.Wrap : TextWrapping.NoWrap,
             MinHeight = minHeight,
         };
-        box.TextChanged += (_, _) => changed(box.Text ?? string.Empty);
+        box.AttachedToVisualTree += (_, _) => initialized = true;
+        box.TextChanged += (_, _) =>
+        {
+            if (initialized)
+            {
+                changed(box.Text ?? string.Empty);
+            }
+        };
         return box;
     }
 
@@ -1136,10 +1568,74 @@ public sealed class SettingsWindow : Window
         Child = new TextBlock { Classes = { "muted" }, Text = text }
     };
 
+    private async Task<bool> ConfirmAsync(string title, string message, string confirmText, string cancelText)
+    {
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var confirm = new AButton { Classes = { "primary" }, Content = confirmText, MinWidth = 96 };
+        var cancel = new AButton { Content = cancelText, MinWidth = 96 };
+        var dialog = new Window
+        {
+            Title = title,
+            Width = 460,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Background = AApplication.Current?.FindResource("TpAppBackground") as IBrush ?? Brush("TpVoidBrush"),
+            Content = new Border
+            {
+                Padding = new AThickness(20),
+                Child = new StackPanel
+                {
+                    Spacing = 16,
+                    Children =
+                    {
+                        new TextBlock { Classes = { "sectionTitle" }, Text = title },
+                        new TextBlock { Classes = { "muted" }, Text = message },
+                        new StackPanel
+                        {
+                            Orientation = AOrientation.Horizontal,
+                            HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Right,
+                            Spacing = 10,
+                            Children = { cancel, confirm }
+                        }
+                    }
+                }
+            }
+        };
+
+        confirm.Click += (_, _) => { completion.TrySetResult(true); dialog.Close(); };
+        cancel.Click += (_, _) => { completion.TrySetResult(false); dialog.Close(); };
+        dialog.Closed += (_, _) => completion.TrySetResult(false);
+        if (VisualRoot is Window owner)
+        {
+            _ = dialog.ShowDialog(owner);
+        }
+        else
+        {
+            dialog.Show();
+        }
+
+        return await completion.Task;
+    }
+
     private static T WithColumn<T>(T control, int column) where T : AControl
     {
         Grid.SetColumn(control, column);
         return control;
+    }
+
+    private static void RefreshList(AListBox? list)
+    {
+        if (list == null)
+        {
+            return;
+        }
+
+        var selected = list.SelectedItem;
+        var source = list.ItemsSource;
+        list.ItemsSource = null;
+        list.ItemsSource = source;
+        list.SelectedItem = selected;
     }
 
     private static AControl DockBottom(AControl control)

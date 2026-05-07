@@ -14,6 +14,19 @@ internal static class DisplayPlacement
         return screens.ScreenFromPoint(cursor) ?? screens.Primary;
     }
 
+    public static AScreen? GetScreenForWindow(IntPtr windowHandle, AScreens screens)
+    {
+        if (windowHandle == IntPtr.Zero || !GetWindowRect(windowHandle, out var rect))
+        {
+            return null;
+        }
+
+        var center = new PixelPoint(
+            rect.Left + Math.Max(0, rect.Right - rect.Left) / 2,
+            rect.Top + Math.Max(0, rect.Bottom - rect.Top) / 2);
+        return screens.ScreenFromPoint(center) ?? screens.Primary;
+    }
+
     public static PixelPoint GetCursorPixelPoint()
     {
         return GetCursorPos(out var point)
@@ -37,10 +50,23 @@ internal static class DisplayPlacement
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetCursorPos(out NativePoint point);
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(IntPtr hWnd, out NativeRect rect);
+
     [StructLayout(LayoutKind.Sequential)]
     private readonly struct NativePoint
     {
         public readonly int X;
         public readonly int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly struct NativeRect
+    {
+        public readonly int Left;
+        public readonly int Top;
+        public readonly int Right;
+        public readonly int Bottom;
     }
 }

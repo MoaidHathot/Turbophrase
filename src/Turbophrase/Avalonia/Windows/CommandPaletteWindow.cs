@@ -26,6 +26,7 @@ public sealed class CommandPaletteWindow : Window
     private readonly TextBlock _statusText;
     private readonly IReadOnlyList<PickerOperation> _allOperations;
     private readonly List<PickerOperation> _visibleOperations = new();
+    private bool _captureReady;
     private int _selectedIndex;
     private bool _activateWhenOpened;
 
@@ -84,18 +85,21 @@ public sealed class CommandPaletteWindow : Window
 
     public void SetCapturePending()
     {
+        _captureReady = false;
         _statusText.Foreground = Brush("TpMutedTextBrush");
         _statusText.Text = "Capturing selected text...";
     }
 
     public void SetCaptureReady()
     {
+        _captureReady = true;
         _statusText.Foreground = Brush("TpMutedTextBrush");
         _statusText.Text = "Text captured. Type to filter, Enter selects, Esc cancels.";
     }
 
     public void SetCaptureFailed(string message)
     {
+        _captureReady = false;
         _statusText.Foreground = Brush("TpDangerBrush");
         _statusText.Text = message;
     }
@@ -340,6 +344,13 @@ public sealed class CommandPaletteWindow : Window
     {
         if (_selectedIndex < 0 || _selectedIndex >= _visibleOperations.Count)
         {
+            return;
+        }
+
+        if (!_captureReady)
+        {
+            _statusText.Foreground = Brush("TpDangerBrush");
+            _statusText.Text = "Text capture must succeed before an operation can run.";
             return;
         }
 

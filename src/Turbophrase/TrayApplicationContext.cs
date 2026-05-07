@@ -25,6 +25,7 @@ public class TrayApplicationContext : ApplicationContext
     private readonly SynchronizationContext _uiContext;
     private readonly int _uiThreadId;
     private SettingsWindow? _settingsWindow;
+    private bool _setupRequired;
 
     public TrayApplicationContext()
     {
@@ -59,6 +60,11 @@ public class TrayApplicationContext : ApplicationContext
                     RuntimeLog.Configure(_config.Logging);
                     RuntimeLog.Write("first-run-wizard-finished");
                 }
+                else
+                {
+                    _setupRequired = true;
+                    RuntimeLog.Write("first-run-wizard-cancelled setup-required");
+                }
             }
 
             // Initialize services
@@ -73,7 +79,8 @@ public class TrayApplicationContext : ApplicationContext
             {
                 Icon = LoadApplicationIcon(),
                 Visible = true,
-                Text = "Turbophrase - AI Text Transformer"
+                Text = "Turbophrase - AI Text Transformer",
+                ContextMenuStrip = BuildNativeTrayMenu(),
             };
             _trayIcon.MouseUp += OnTrayIconMouseUp;
 
@@ -135,6 +142,12 @@ public class TrayApplicationContext : ApplicationContext
 
     private void RegisterHotkeys()
     {
+        if (_setupRequired)
+        {
+            RuntimeLog.Write("hotkeys-register-skipped setup-required");
+            return;
+        }
+
         var registered = _hotkeyService.RegisterHotkeys(_config.Hotkeys);
         RuntimeLog.Write($"hotkeys-register-summary registered={registered.Count} total={_config.Hotkeys.Count}");
 
@@ -184,6 +197,7 @@ public class TrayApplicationContext : ApplicationContext
 
             // Update config and orchestrator
             _config = newConfig;
+            _setupRequired = FirstRunWindow.ShouldShowFor(_config);
             _orchestrator = new TextTransformOrchestrator(_config);
 
             // Re-register hotkeys with new config
@@ -192,7 +206,7 @@ public class TrayApplicationContext : ApplicationContext
             // Notify user (if enabled)
             if (_config.Notifications.ShowOnConfigReload)
             {
-                ShowNotification("Turbophrase", "Configuration reloaded", isError: false);
+                ShowNotification("Turbophrase", "Configuration reloaded", isError: false, NotificationCategory.Config);
             }
         }
         catch (Exception ex)
@@ -233,6 +247,7 @@ public class TrayApplicationContext : ApplicationContext
         if (await FirstRunWindow.ShowProviderSetupAsync())
         {
             ReloadConfiguration();
+            _setupRequired = FirstRunWindow.ShouldShowFor(_config);
         }
     }
 
@@ -249,7 +264,7 @@ public class TrayApplicationContext : ApplicationContext
             // Notify user (if enabled)
             if (_config.Notifications.ShowOnProviderChange)
             {
-                ShowNotification("Turbophrase", $"Default provider changed to: {providerName}", isError: false);
+                ShowNotification("Turbophrase", $"Default provider changed to: {providerName}", isError: false, NotificationCategory.Provider);
             }
         }
         catch (Exception ex)
@@ -263,16 +278,20 @@ public class TrayApplicationContext : ApplicationContext
 
     private void ShowNotification(string title, string message, bool isError)
     {
-        // Check notification settings
+        ShowNotification(title, message, isError, NotificationCategory.Transform);
+    }
+
+    private void ShowNotification(string title, string message, bool isError, NotificationCategory category)
+    {
         if (isError && !_config.Notifications.ShowOnError)
             return;
-        if (!isError && !_config.Notifications.ShowOnSuccess)
+        if (!isError && category == NotificationCategory.Transform && !_config.Notifications.ShowOnSuccess)
             return;
 
-        TextTransformOrchestrator.ShowNotification(title, message, isError);
+        var shown = TextTransformOrchestrator.ShowNotification(title, message, isError);
 
-        // Toast notifications can fail silently on some systems, so show a tray balloon for errors too.
-        if (isError)
+        // Toasts can fail on unpackaged Windows installs, so keep a tray fallback.
+        if (isError || !shown)
         {
             try
             {
@@ -292,6 +311,12 @@ public class TrayApplicationContext : ApplicationContext
     {
         try
         {
+            if (_setupRequired)
+            {
+                ShowSetupRequiredNotification();
+                return;
+            }
+
             RuntimeLog.Write($"hotkey-handler-start keys='{e.Binding.Keys}' action='{e.Binding.Action ?? "preset"}' preset='{e.Binding.Preset}'");
             await ExecuteBindingAsync(e.Binding);
             RuntimeLog.Write($"hotkey-handler-end keys='{e.Binding.Keys}'");
@@ -315,9 +340,51 @@ public class TrayApplicationContext : ApplicationContext
 
     private void OnTrayIconMouseUp(object? sender, MouseEventArgs e)
     {
-        if (e.Button is MouseButtons.Left or MouseButtons.Right)
+        if (e.Button == MouseButtons.Left)
         {
             OpenTrayMenuWindow();
+        }
+    }
+
+    private ContextMenuStrip BuildNativeTrayMenu()
+    {
+        var menu = new ContextMenuStrip();
+        var setupItem = new ToolStripMenuItem(_setupRequired ? "Finish Provider Setup" : "Provider Setup");
+        setupItem.Click += async (_, _) => await RunOnTrayThread(OpenProviderSetupWindowAsync);
+        var settingsItem = new ToolStripMenuItem("Settings");
+        settingsItem.Click += (_, _) => _ = RunOnTrayThread(OpenSettingsWindow);
+        var pickerItem = new ToolStripMenuItem("Choose Operation") { Enabled = !_setupRequired };
+        pickerItem.Click += async (_, _) => await RunOnTrayThread(() => ExecutePresetPickerAsync(new HotkeyBinding { Action = "preset-picker", Name = "Choose Operation" }));
+        var promptItem = new ToolStripMenuItem("Custom Prompt") { Enabled = !_setupRequired };
+        promptItem.Click += async (_, _) => await RunOnTrayThread(() => ExecuteCustomPromptAsync());
+        var exitItem = new ToolStripMenuItem("Exit");
+        exitItem.Click += (_, _) => _ = RunOnTrayThread(ExitThread);
+        menu.Items.Add(setupItem);
+        menu.Items.Add(settingsItem);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(pickerItem);
+        menu.Items.Add(promptItem);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(exitItem);
+        menu.Opening += (_, _) => RefreshNativeTrayMenu(menu);
+        return menu;
+    }
+
+    private void RefreshNativeTrayMenu(ContextMenuStrip menu)
+    {
+        if (menu.Items[0] is ToolStripMenuItem setupItem)
+        {
+            setupItem.Text = _setupRequired ? "Finish Provider Setup" : "Provider Setup";
+        }
+
+        if (menu.Items[3] is ToolStripMenuItem pickerItem)
+        {
+            pickerItem.Enabled = !_setupRequired;
+        }
+
+        if (menu.Items[4] is ToolStripMenuItem promptItem)
+        {
+            promptItem.Enabled = !_setupRequired;
         }
     }
 
@@ -333,6 +400,17 @@ public class TrayApplicationContext : ApplicationContext
 
     private IReadOnlyList<TrayMenuSection> BuildTrayMenuSections()
     {
+        if (_setupRequired)
+        {
+            return
+            [
+                new TrayMenuSection("Setup Required", [
+                    new TrayMenuItem("Finish Provider Setup", "Turbophrase needs a usable provider before it can transform text.", InvokeAsync: () => RunOnTrayThread(OpenProviderSetupWindowAsync))
+                ]),
+                new TrayMenuSection("App", BuildAppMenuItems())
+            ];
+        }
+
         var transformItems = new List<TrayMenuItem>
         {
             new("Custom Prompt", "Capture selected text and enter one-off instructions.", InvokeAsync: () => RunOnTrayThread(() => ExecuteCustomPromptAsync()))
@@ -438,7 +516,7 @@ public class TrayApplicationContext : ApplicationContext
                 StartupManager.Disable();
                 if (_config.Notifications.ShowOnSuccess)
                 {
-                    TextTransformOrchestrator.ShowNotification("Turbophrase", "Removed from Windows startup", isError: false);
+                    ShowNotification("Turbophrase", "Removed from Windows startup", isError: false, NotificationCategory.Startup);
                 }
             }
             else
@@ -446,7 +524,12 @@ public class TrayApplicationContext : ApplicationContext
                 StartupManager.Enable(ConfigurationService.CustomConfigFilePath);
                 if (_config.Notifications.ShowOnSuccess)
                 {
-                    TextTransformOrchestrator.ShowNotification("Turbophrase", "Added to Windows startup", isError: false);
+                    var enabled = StartupManager.IsEnabled();
+                    ShowNotification(
+                        "Turbophrase",
+                        enabled ? "Added to Windows startup" : "Windows did not enable startup. Check Startup Apps settings or organization policy.",
+                        isError: !enabled,
+                        NotificationCategory.Startup);
                 }
             }
         }
@@ -458,6 +541,12 @@ public class TrayApplicationContext : ApplicationContext
 
     private async Task ExecuteBindingAsync(HotkeyBinding binding)
     {
+        if (_setupRequired)
+        {
+            ShowSetupRequiredNotification();
+            return;
+        }
+
         if (binding.IsCustomPromptAction)
         {
             await ExecuteCustomPromptAsync(binding);
@@ -481,9 +570,11 @@ public class TrayApplicationContext : ApplicationContext
 
     private async Task ExecutePresetAsync(string presetName, string displayName)
     {
+        var sourceWindowHandle = _orchestrator.GetActiveWindowHandle();
         await ExecuteTransformWithIndicatorsAsync(
             async () => await _orchestrator.TransformSelectedTextAsync(presetName),
-            displayName);
+            displayName,
+            sourceWindowHandle);
     }
 
     private async Task ExecutePresetPickerAsync(HotkeyBinding binding)
@@ -523,11 +614,13 @@ public class TrayApplicationContext : ApplicationContext
         var selectedOperation = dialog?.AcceptedOperation;
         if (dialog?.Accepted != true || selectedOperation == null)
         {
+            await _orchestrator.RestoreClipboardAsync(captureResult);
             return;
         }
 
         if (!captureResult.Success)
         {
+            await _orchestrator.RestoreClipboardAsync(captureResult);
             ShowTransformResult(TransformResult.Fail(captureResult.ErrorMessage ?? "No text is selected."), GetBindingDisplayName(binding));
             return;
         }
@@ -546,9 +639,14 @@ public class TrayApplicationContext : ApplicationContext
 
         if (binding.IsPresetAction)
         {
-            await ExecuteTransformWithIndicatorsAsync(
+            var success = await ExecuteTransformWithIndicatorsAsync(
                 async () => await _orchestrator.TransformCapturedTextWithPresetAsync(captureResult, binding.Preset),
-                operation.DisplayName);
+                operation.DisplayName,
+                captureResult.SourceWindowHandle);
+            if (!success)
+            {
+                await _orchestrator.RestoreClipboardAsync(captureResult);
+            }
             return;
         }
 
@@ -591,6 +689,7 @@ public class TrayApplicationContext : ApplicationContext
 
         if (dialog?.Accepted != true)
         {
+            await _orchestrator.RestoreClipboardAsync(captureResult);
             return;
         }
 
@@ -598,12 +697,14 @@ public class TrayApplicationContext : ApplicationContext
         var selectedProvider = dialog.SelectedProvider;
         if (string.IsNullOrWhiteSpace(promptText))
         {
+            await _orchestrator.RestoreClipboardAsync(captureResult);
             ShowTransformResult(TransformResult.Fail("Prompt cannot be empty."), GetBindingDisplayName(binding));
             return;
         }
 
         if (!captureResult.Success)
         {
+            await _orchestrator.RestoreClipboardAsync(captureResult);
             ShowTransformResult(TransformResult.Fail(captureResult.ErrorMessage ?? "No text is selected."), GetBindingDisplayName(binding));
             return;
         }
@@ -630,6 +731,7 @@ public class TrayApplicationContext : ApplicationContext
 
         if (dialog?.Accepted != true)
         {
+            await _orchestrator.RestoreClipboardAsync(captureResult);
             return;
         }
 
@@ -637,6 +739,7 @@ public class TrayApplicationContext : ApplicationContext
         var selectedProvider = dialog.SelectedProvider;
         if (string.IsNullOrWhiteSpace(promptText))
         {
+            await _orchestrator.RestoreClipboardAsync(captureResult);
             ShowTransformResult(TransformResult.Fail("Prompt cannot be empty."), GetBindingDisplayName(binding));
             return;
         }
@@ -648,16 +751,22 @@ public class TrayApplicationContext : ApplicationContext
     {
         if (!captureResult.Success)
         {
+            await _orchestrator.RestoreClipboardAsync(captureResult);
             ShowTransformResult(TransformResult.Fail(captureResult.ErrorMessage ?? "No text is selected."), GetBindingDisplayName(binding));
             return;
         }
 
-        await ExecuteTransformWithIndicatorsAsync(
+        var success = await ExecuteTransformWithIndicatorsAsync(
             async () => await _orchestrator.TransformCapturedTextAsync(
                 captureResult,
                 BuildCustomPromptSystemPrompt(binding, promptText, captureResult.SelectedText ?? string.Empty),
                 binding?.Provider ?? selectedProvider),
-            GetBindingDisplayName(binding));
+            GetBindingDisplayName(binding),
+            captureResult.SourceWindowHandle);
+        if (!success)
+        {
+            await _orchestrator.RestoreClipboardAsync(captureResult);
+        }
     }
 
     private async Task<SelectionCaptureResult> CaptureForCommandSurfaceAsync(IntPtr sourceWindowHandle)
@@ -722,19 +831,20 @@ public class TrayApplicationContext : ApplicationContext
         return binding.Preset;
     }
 
-    private async Task ExecuteTransformWithIndicatorsAsync(Func<Task<TransformResult>> operation, string displayName)
+    private async Task<bool> ExecuteTransformWithIndicatorsAsync(Func<Task<TransformResult>> operation, string displayName, IntPtr sourceWindowHandle)
     {
         RuntimeLog.Write($"transform-indicators-start display='{displayName}' overlay={_config.Notifications.ShowProcessingOverlay} animation={_config.Notifications.ShowProcessingAnimation}");
         if (_config.Notifications.ShowProcessingAnimation)
             _iconAnimator.StartAnimation();
         if (_config.Notifications.ShowProcessingOverlay)
-            AvaloniaUiHost.Invoke(_processingOverlay.ShowOverlay);
+            AvaloniaUiHost.Invoke(() => _processingOverlay.ShowOverlay(displayName, sourceWindowHandle));
 
         try
         {
             var result = await operation();
             RuntimeLog.Write($"transform-operation-complete success={result.Success} provider='{result.ProviderName}' error='{result.ErrorMessage}'");
             ShowTransformResult(result, displayName);
+            return result.Success;
         }
         finally
         {
@@ -764,8 +874,17 @@ public class TrayApplicationContext : ApplicationContext
             var message = result.ProviderName != null
                 ? $"{displayName} completed using {result.ProviderName}"
                 : $"{displayName} completed";
-            TextTransformOrchestrator.ShowNotification("Turbophrase", message, isError: false);
+            ShowNotification("Turbophrase", message, isError: false, NotificationCategory.Transform);
         }
+    }
+
+    private void ShowSetupRequiredNotification()
+    {
+        ShowNotification(
+            "Turbophrase Setup Required",
+            "Finish provider setup before transforming text.",
+            isError: true,
+            NotificationCategory.Setup);
     }
 
     private string GetBindingDisplayName(HotkeyBinding? binding)
@@ -935,4 +1054,13 @@ internal sealed class HotkeyMessageFilter : IMessageFilter
 
         return false;
     }
+}
+
+internal enum NotificationCategory
+{
+    Transform,
+    Config,
+    Provider,
+    Startup,
+    Setup,
 }

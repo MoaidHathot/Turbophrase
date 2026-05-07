@@ -46,6 +46,11 @@ public class TextTransformOrchestrator
     /// </summary>
     public IntPtr GetActiveWindowHandle() => _clipboardService.GetActiveWindowHandle();
 
+    public Task RestoreClipboardAsync(SelectionCaptureResult captureResult)
+        => captureResult.HasOriginalClipboardSnapshot
+            ? _clipboardService.RestoreClipboardTextAsync(captureResult.OriginalClipboardText)
+            : Task.CompletedTask;
+
     /// <summary>
     /// Captures selected text from a known source window and remembers that window for paste-back.
     /// </summary>
@@ -60,15 +65,15 @@ public class TextTransformOrchestrator
             await Task.Delay(120);
         }
 
-        var selectedText = await _clipboardService.GetSelectedTextAsync();
-        if (string.IsNullOrWhiteSpace(selectedText))
+        var capture = await _clipboardService.CaptureSelectedTextAsync();
+        if (string.IsNullOrWhiteSpace(capture.SelectedText))
         {
             RuntimeLog.Write("selection-capture-empty");
-            return SelectionCaptureResult.Fail("No text is selected.");
+            return SelectionCaptureResult.Fail("No text is selected.", capture.OriginalClipboardText, hasOriginalClipboardSnapshot: true);
         }
 
-        RuntimeLog.Write($"selection-capture-success length={selectedText.Length}");
-        return SelectionCaptureResult.Ok(selectedText, sourceWindowHandle);
+        RuntimeLog.Write($"selection-capture-success length={capture.SelectedText.Length}");
+        return SelectionCaptureResult.Ok(capture.SelectedText, sourceWindowHandle, capture.OriginalClipboardText);
     }
 
     /// <summary>
@@ -92,7 +97,13 @@ public class TextTransformOrchestrator
             return TransformResult.Fail(captureResult.ErrorMessage ?? "No text is selected.");
         }
 
-        return await TransformCapturedTextAsync(captureResult, preset.SystemPrompt, preset.Provider, restoreFocusBeforePaste: false);
+        var result = await TransformCapturedTextAsync(captureResult, preset.SystemPrompt, preset.Provider, restoreFocusBeforePaste: false);
+        if (!result.Success)
+        {
+            await RestoreClipboardAsync(captureResult);
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -116,7 +127,13 @@ public class TextTransformOrchestrator
         }
 
         RuntimeLog.Write($"captured-preset-transform-start preset='{presetName}' provider='{preset.Provider ?? _config.DefaultProvider}'");
-        return TransformTextAsync(captureResult.SelectedText, preset, captureResult.SourceWindowHandle, restoreFocusBeforePaste);
+        return TransformTextAsync(
+            captureResult.SelectedText,
+            preset,
+            captureResult.SourceWindowHandle,
+            restoreFocusBeforePaste,
+            captureResult.OriginalClipboardText,
+            captureResult.HasOriginalClipboardSnapshot);
     }
 
     /// <summary>
@@ -141,7 +158,13 @@ public class TextTransformOrchestrator
             Provider = providerName
         };
 
-        return TransformTextAsync(captureResult.SelectedText, preset, captureResult.SourceWindowHandle, restoreFocusBeforePaste);
+        return TransformTextAsync(
+            captureResult.SelectedText,
+            preset,
+            captureResult.SourceWindowHandle,
+            restoreFocusBeforePaste,
+            captureResult.OriginalClipboardText,
+            captureResult.HasOriginalClipboardSnapshot);
     }
 
     /// <summary>
@@ -188,21 +211,21 @@ public class TextTransformOrchestrator
     /// <summary>
     /// Shows an error notification.
     /// </summary>
-    public static void ShowErrorNotification(string title, string message)
+    public static bool ShowErrorNotification(string title, string message)
     {
-        ShowNotification(title, message, isError: true);
+        return ShowNotification(title, message, isError: true);
     }
 
     /// <summary>
     /// Shows a success notification.
     /// </summary>
-    public static void ShowSuccessNotification(string presetName, string? providerName = null)
+    public static bool ShowSuccessNotification(string presetName, string? providerName = null)
     {
         var message = providerName != null
             ? $"{presetName} completed using {providerName}"
             : $"{presetName} completed";
 
-        ShowNotification("Turbophrase", message, isError: false);
+        return ShowNotification("Turbophrase", message, isError: false);
     }
 
     /// <summary>
@@ -211,13 +234,23 @@ public class TextTransformOrchestrator
     /// <param name="title">The notification title.</param>
     /// <param name="message">The notification message.</param>
     /// <param name="isError">Whether this is an error notification.</param>
-    public static void ShowNotification(string title, string message, bool isError)
+    public static bool ShowNotification(string title, string message, bool isError)
     {
         try
         {
             var builder = new ToastContentBuilder()
                 .AddText(title)
-                .AddText(message);
+                .AddText(message)
+                .AddButton(new ToastButton()
+                    .SetContent("Open Settings")
+                    .AddArgument("action", "settings"));
+
+            if (isError)
+            {
+                builder.AddButton(new ToastButton()
+                    .SetContent("Copy Error")
+                    .AddArgument("action", "copy-error"));
+            }
 
             // Add app icon if available (use PNG, no circle crop for this icon design)
             var iconPath = GetAppIconPath();
@@ -228,11 +261,11 @@ public class TextTransformOrchestrator
             }
 
             builder.Show();
+            return true;
         }
         catch
         {
-            // Fallback: If toast notifications fail, we silently ignore
-            // The user will still see the result of the operation
+            return false;
         }
     }
 
@@ -271,7 +304,9 @@ public class TextTransformOrchestrator
         string selectedText,
         PromptPreset preset,
         IntPtr sourceWindowHandle,
-        bool restoreFocusBeforePaste)
+        bool restoreFocusBeforePaste,
+        string? originalClipboardText,
+        bool hasOriginalClipboardSnapshot)
     {
         if (_isProcessing)
         {
@@ -337,6 +372,11 @@ public class TextTransformOrchestrator
         }
         finally
         {
+            if (hasOriginalClipboardSnapshot)
+            {
+                await _clipboardService.RestoreClipboardTextAsync(originalClipboardText);
+            }
+
             _isProcessing = false;
         }
     }
@@ -347,12 +387,14 @@ public class TextTransformOrchestrator
 /// </summary>
 public sealed class SelectionCaptureResult
 {
-    private SelectionCaptureResult(bool success, string? selectedText, IntPtr sourceWindowHandle, string? errorMessage)
+    private SelectionCaptureResult(bool success, string? selectedText, IntPtr sourceWindowHandle, string? errorMessage, string? originalClipboardText, bool hasOriginalClipboardSnapshot)
     {
         Success = success;
         SelectedText = selectedText;
         SourceWindowHandle = sourceWindowHandle;
         ErrorMessage = errorMessage;
+        OriginalClipboardText = originalClipboardText;
+        HasOriginalClipboardSnapshot = hasOriginalClipboardSnapshot;
     }
 
     public bool Success { get; }
@@ -363,9 +405,13 @@ public sealed class SelectionCaptureResult
 
     public string? ErrorMessage { get; }
 
-    public static SelectionCaptureResult Ok(string selectedText, IntPtr sourceWindowHandle)
-        => new(true, selectedText, sourceWindowHandle, null);
+    public string? OriginalClipboardText { get; }
 
-    public static SelectionCaptureResult Fail(string errorMessage)
-        => new(false, null, IntPtr.Zero, errorMessage);
+    public bool HasOriginalClipboardSnapshot { get; }
+
+    public static SelectionCaptureResult Ok(string selectedText, IntPtr sourceWindowHandle, string? originalClipboardText)
+        => new(true, selectedText, sourceWindowHandle, null, originalClipboardText, hasOriginalClipboardSnapshot: true);
+
+    public static SelectionCaptureResult Fail(string errorMessage, string? originalClipboardText = null, bool hasOriginalClipboardSnapshot = false)
+        => new(false, null, IntPtr.Zero, errorMessage, originalClipboardText, hasOriginalClipboardSnapshot);
 }

@@ -71,12 +71,10 @@ public class ClipboardService
     }
 
     /// <summary>
-    /// Gets the currently selected text by simulating Ctrl+C and reading from clipboard.
+    /// Captures the currently selected text while preserving the text that was on the clipboard before capture.
     /// </summary>
-    /// <returns>The selected text, or null if no text is selected.</returns>
-    public async Task<string?> GetSelectedTextAsync()
+    public async Task<ClipboardCaptureResult> CaptureSelectedTextAsync()
     {
-        // Store original clipboard content
         var originalContent = await GetClipboardTextAsync();
 
         // Release any held modifier keys first (from the hotkey)
@@ -100,20 +98,23 @@ public class ClipboardService
             if (!string.IsNullOrEmpty(selectedText))
             {
                 RuntimeLog.Write($"selection-copy-success method='{copyAttempt.Name}' length={selectedText.Length}");
-                return selectedText;
+                return ClipboardCaptureResult.Success(selectedText, originalContent);
             }
         }
 
         RuntimeLog.Write("selection-copy-failed no-text-copied");
 
-        // Restore original clipboard content
-        if (!string.IsNullOrEmpty(originalContent))
-        {
-            await SetClipboardTextAsync(originalContent);
-        }
-
-        return null;
+        await RestoreClipboardTextAsync(originalContent);
+        return ClipboardCaptureResult.Fail(originalContent);
     }
+
+    /// <summary>
+    /// Gets the currently selected text by simulating Ctrl+C and reading from clipboard.
+    /// </summary>
+    /// <returns>The selected text, or null if no text is selected.</returns>
+    public async Task<string?> GetSelectedTextAsync() => (await CaptureSelectedTextAsync()).SelectedText;
+
+    public Task RestoreClipboardTextAsync(string? text) => SetClipboardTextAsync(text ?? string.Empty);
 
     /// <summary>
     /// Replaces the currently selected text with new text by setting clipboard and simulating Ctrl+V.
@@ -335,4 +336,13 @@ public class ClipboardService
         yield return ("ctrl+insert", SimulateCopyWithCtrlInsert);
         yield return ("ctrl+shift+c", SimulateCopyWithCtrlShiftC);
     }
+}
+
+public sealed record ClipboardCaptureResult(bool Succeeded, string? SelectedText, string? OriginalClipboardText)
+{
+    public static ClipboardCaptureResult Success(string selectedText, string? originalClipboardText)
+        => new(true, selectedText, originalClipboardText);
+
+    public static ClipboardCaptureResult Fail(string? originalClipboardText)
+        => new(false, null, originalClipboardText);
 }

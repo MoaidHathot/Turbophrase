@@ -72,10 +72,9 @@ public class ConfigurationServiceTests
     {
         var json = ConfigurationService.GetDefaultConfigJson();
 
-        Assert.Contains("Ctrl+Shift+G", json);
-        Assert.Contains("Ctrl+Shift+P", json);
-        Assert.Contains("Ctrl+Shift+F", json);
-        Assert.Contains("Ctrl+Shift+C", json);
+        Assert.Contains("Ctrl+Shift+Space", json);
+        Assert.Contains("Ctrl+Shift+O", json);
+        Assert.DoesNotContain("Ctrl+Shift+C", json);
     }
 
     [Fact]
@@ -266,11 +265,7 @@ public class ConfigurationServiceTests
             var config = ConfigurationService.LoadConfiguration();
 
             Assert.NotNull(config);
-            Assert.Equal(6, config.Hotkeys.Count);
-            Assert.Contains(config.Hotkeys, h => h.Keys == "Ctrl+Shift+G" && h.Preset == "grammar");
-            Assert.Contains(config.Hotkeys, h => h.Keys == "Ctrl+Shift+P" && h.Preset == "paraphrase");
-            Assert.Contains(config.Hotkeys, h => h.Keys == "Ctrl+Shift+F" && h.Preset == "formal");
-            Assert.Contains(config.Hotkeys, h => h.Keys == "Ctrl+Shift+C" && h.Preset == "casual");
+            Assert.Equal(2, config.Hotkeys.Count);
             Assert.Contains(config.Hotkeys, h => h.Keys == "Ctrl+Shift+Space" && h.Action == "custom-prompt");
             Assert.Contains(config.Hotkeys, h => h.Keys == "Ctrl+Shift+O" && h.Action == "preset-picker");
         }
