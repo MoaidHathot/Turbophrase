@@ -54,7 +54,10 @@ public class TextTransformOrchestrator
     /// <summary>
     /// Captures selected text from a known source window and remembers that window for paste-back.
     /// </summary>
-    public async Task<SelectionCaptureResult> CaptureSelectedTextAsync(IntPtr sourceWindowHandle, bool restoreFocusBeforeCopy = false)
+    public async Task<SelectionCaptureResult> CaptureSelectedTextAsync(
+        IntPtr sourceWindowHandle,
+        bool restoreFocusBeforeCopy = false,
+        Action? afterFirstCopyAttempt = null)
     {
         RuntimeLog.Write($"selection-capture-start hwnd=0x{sourceWindowHandle.ToInt64():X}");
 
@@ -65,7 +68,23 @@ public class TextTransformOrchestrator
             await Task.Delay(120);
         }
 
-        var capture = await _clipboardService.CaptureSelectedTextAsync();
+        var afterFirstCopyAttemptCalled = false;
+        var capture = await _clipboardService.CaptureSelectedTextAsync(
+            beforeCopyAttempt: () =>
+            {
+                if (restoreFocusBeforeCopy)
+                {
+                    _clipboardService.RestoreWindowFocus(sourceWindowHandle);
+                }
+            },
+            afterCopyAttempt: () =>
+            {
+                if (!afterFirstCopyAttemptCalled)
+                {
+                    afterFirstCopyAttemptCalled = true;
+                    afterFirstCopyAttempt?.Invoke();
+                }
+            });
         if (string.IsNullOrWhiteSpace(capture.SelectedText))
         {
             RuntimeLog.Write("selection-capture-empty");

@@ -13,6 +13,7 @@ namespace Turbophrase;
 public class TrayApplicationContext : ApplicationContext
 {
     private const int WM_HOTKEY = 0x0312;
+    private const int CommandSurfaceDelayMs = 140;
 
     private readonly NotifyIcon _trayIcon;
     private TurbophraseConfig _config;
@@ -580,39 +581,31 @@ public class TrayApplicationContext : ApplicationContext
     private async Task ExecutePresetPickerAsync(HotkeyBinding binding)
     {
         var sourceWindowHandle = _orchestrator.GetActiveWindowHandle();
-        var dialogTask = AvaloniaUiHost.InvokeAsync(() =>
-        {
-            var created = new CommandPaletteWindow(GetPickerOperations())
-            {
-                ShowActivated = false
-            };
-            created.SetCapturePending();
-            return created;
-        });
+        var firstCopyAttemptSent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var captureTask = CaptureForCommandSurfaceAsync(sourceWindowHandle, () => firstCopyAttemptSent.TrySetResult());
+        CommandPaletteWindow? dialog = null;
+        Task? windowClosed = null;
 
-        var captureTask = CaptureForCommandSurfaceAsync(sourceWindowHandle);
-        var dialog = await dialogTask;
+        if (await Task.WhenAny(captureTask, WaitForPendingSurfaceAsync(firstCopyAttemptSent.Task)) != captureTask)
+        {
+            dialog = await CreatePickerDialogAsync();
+            windowClosed = AvaloniaUiHost.ShowWindowAsync(dialog);
+        }
+
         var captureResult = await captureTask;
 
-        AvaloniaUiHost.Invoke(() =>
+        if (dialog == null)
         {
-            if (captureResult.Success)
-            {
-                dialog.SetCaptureReady();
-            }
-            else
-            {
-                dialog.SetCaptureFailed(captureResult.ErrorMessage ?? "No text is selected.");
-            }
+            dialog = await CreatePickerDialogAsync();
+            windowClosed = AvaloniaUiHost.ShowWindowAsync(dialog);
+        }
 
-            dialog.ActivateForInput();
-        });
+        UpdatePickerCaptureState(dialog, captureResult);
 
-        var windowClosed = AvaloniaUiHost.ShowWindowAsync(dialog);
-        await windowClosed;
+        await windowClosed!;
 
-        var selectedOperation = dialog?.AcceptedOperation;
-        if (dialog?.Accepted != true || selectedOperation == null)
+        var selectedOperation = dialog.AcceptedOperation;
+        if (dialog.Accepted != true || selectedOperation == null)
         {
             await _orchestrator.RestoreClipboardAsync(captureResult);
             return;
@@ -626,6 +619,38 @@ public class TrayApplicationContext : ApplicationContext
         }
 
         await ExecutePickedOperationAsync(selectedOperation, captureResult);
+    }
+
+    private Task<CommandPaletteWindow> CreatePickerDialogAsync()
+    {
+        var dialogTask = AvaloniaUiHost.InvokeAsync(() =>
+        {
+            var created = new CommandPaletteWindow(GetPickerOperations())
+            {
+                ShowActivated = false
+            };
+            created.SetCapturePending();
+            return created;
+        });
+
+        return dialogTask;
+    }
+
+    private void UpdatePickerCaptureState(CommandPaletteWindow dialog, SelectionCaptureResult captureResult)
+    {
+        AvaloniaUiHost.Invoke(() =>
+        {
+            if (captureResult.Success)
+            {
+                dialog.SetCaptureReady();
+            }
+            else
+            {
+                dialog.SetCaptureFailed(captureResult.ErrorMessage ?? "No text is selected.");
+            }
+
+            dialog.ActivateForInput();
+        });
     }
 
     private async Task ExecutePickedOperationAsync(PickerOperation operation, SelectionCaptureResult captureResult)
@@ -656,38 +681,30 @@ public class TrayApplicationContext : ApplicationContext
     private async Task ExecuteCustomPromptAsync(HotkeyBinding? binding = null)
     {
         var sourceWindowHandle = _orchestrator.GetActiveWindowHandle();
-        var dialogTask = AvaloniaUiHost.InvokeAsync(() =>
-        {
-            var created = new PromptCommandWindow(_orchestrator.AvailableProviders, _config.DefaultProvider)
-            {
-                ShowActivated = false
-            };
-            created.SetCapturePending();
-            return created;
-        });
+        var firstCopyAttemptSent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var captureTask = CaptureForCommandSurfaceAsync(sourceWindowHandle, () => firstCopyAttemptSent.TrySetResult());
+        PromptCommandWindow? dialog = null;
+        Task? windowClosed = null;
 
-        var captureTask = CaptureForCommandSurfaceAsync(sourceWindowHandle);
-        var dialog = await dialogTask;
+        if (await Task.WhenAny(captureTask, WaitForPendingSurfaceAsync(firstCopyAttemptSent.Task)) != captureTask)
+        {
+            dialog = await CreatePromptDialogAsync();
+            windowClosed = AvaloniaUiHost.ShowWindowAsync(dialog);
+        }
+
         var captureResult = await captureTask;
 
-        AvaloniaUiHost.Invoke(() =>
+        if (dialog == null)
         {
-            if (captureResult.Success)
-            {
-                dialog.SetCaptureReady();
-            }
-            else
-            {
-                dialog.SetCaptureFailed(captureResult.ErrorMessage ?? "No text is selected.");
-            }
+            dialog = await CreatePromptDialogAsync();
+            windowClosed = AvaloniaUiHost.ShowWindowAsync(dialog);
+        }
 
-            dialog.ActivateForInput();
-        });
+        UpdatePromptCaptureState(dialog, captureResult);
 
-        var windowClosed = AvaloniaUiHost.ShowWindowAsync(dialog);
-        await windowClosed;
+        await windowClosed!;
 
-        if (dialog?.Accepted != true)
+        if (dialog.Accepted != true)
         {
             await _orchestrator.RestoreClipboardAsync(captureResult);
             return;
@@ -710,6 +727,38 @@ public class TrayApplicationContext : ApplicationContext
         }
 
         await ExecuteCustomPromptAsync(binding, captureResult, promptText, selectedProvider);
+    }
+
+    private Task<PromptCommandWindow> CreatePromptDialogAsync()
+    {
+        var dialogTask = AvaloniaUiHost.InvokeAsync(() =>
+        {
+            var created = new PromptCommandWindow(_orchestrator.AvailableProviders, _config.DefaultProvider)
+            {
+                ShowActivated = false
+            };
+            created.SetCapturePending();
+            return created;
+        });
+
+        return dialogTask;
+    }
+
+    private void UpdatePromptCaptureState(PromptCommandWindow dialog, SelectionCaptureResult captureResult)
+    {
+        AvaloniaUiHost.Invoke(() =>
+        {
+            if (captureResult.Success)
+            {
+                dialog.SetCaptureReady();
+            }
+            else
+            {
+                dialog.SetCaptureFailed(captureResult.ErrorMessage ?? "No text is selected.");
+            }
+
+            dialog.ActivateForInput();
+        });
     }
 
     private async Task ExecuteCustomPromptAsync(HotkeyBinding? binding, SelectionCaptureResult captureResult)
@@ -769,11 +818,20 @@ public class TrayApplicationContext : ApplicationContext
         }
     }
 
-    private async Task<SelectionCaptureResult> CaptureForCommandSurfaceAsync(IntPtr sourceWindowHandle)
+    private static async Task WaitForPendingSurfaceAsync(Task firstCopyAttemptSent)
+    {
+        await firstCopyAttemptSent;
+        await Task.Delay(CommandSurfaceDelayMs);
+    }
+
+    private async Task<SelectionCaptureResult> CaptureForCommandSurfaceAsync(IntPtr sourceWindowHandle, Action? afterFirstCopyAttempt = null)
     {
         try
         {
-            var result = await _orchestrator.CaptureSelectedTextAsync(sourceWindowHandle, restoreFocusBeforeCopy: true);
+            var result = await _orchestrator.CaptureSelectedTextAsync(
+                sourceWindowHandle,
+                restoreFocusBeforeCopy: true,
+                afterFirstCopyAttempt: afterFirstCopyAttempt);
             return result;
         }
         catch (Exception ex)

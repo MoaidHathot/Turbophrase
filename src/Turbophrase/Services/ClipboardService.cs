@@ -73,7 +73,7 @@ public class ClipboardService
     /// <summary>
     /// Captures the currently selected text while preserving the text that was on the clipboard before capture.
     /// </summary>
-    public async Task<ClipboardCaptureResult> CaptureSelectedTextAsync()
+    public async Task<ClipboardCaptureResult> CaptureSelectedTextAsync(Action? beforeCopyAttempt = null, Action? afterCopyAttempt = null)
     {
         var originalContent = await GetClipboardTextAsync();
 
@@ -85,16 +85,16 @@ public class ClipboardService
 
         foreach (var copyAttempt in GetCopyAttempts())
         {
+            beforeCopyAttempt?.Invoke();
+
             // Clear clipboard to detect if copy was successful
             await SetClipboardTextAsync(string.Empty);
             RuntimeLog.Write($"selection-copy-attempt method='{copyAttempt.Name}'");
 
             copyAttempt.Action();
+            afterCopyAttempt?.Invoke();
 
-            // Wait for copy operation to complete
-            await Task.Delay(150);
-
-            var selectedText = await GetClipboardTextAsync();
+            var selectedText = await WaitForCopiedTextAsync();
             if (!string.IsNullOrEmpty(selectedText))
             {
                 RuntimeLog.Write($"selection-copy-success method='{copyAttempt.Name}' length={selectedText.Length}");
@@ -115,6 +115,21 @@ public class ClipboardService
     public async Task<string?> GetSelectedTextAsync() => (await CaptureSelectedTextAsync()).SelectedText;
 
     public Task RestoreClipboardTextAsync(string? text) => SetClipboardTextAsync(text ?? string.Empty);
+
+    private static async Task<string?> WaitForCopiedTextAsync()
+    {
+        for (var attempt = 0; attempt < 6; attempt++)
+        {
+            await Task.Delay(attempt == 0 ? 35 : 25);
+            var selectedText = await GetClipboardTextAsync();
+            if (!string.IsNullOrEmpty(selectedText))
+            {
+                return selectedText;
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Replaces the currently selected text with new text by setting clipboard and simulating Ctrl+V.
