@@ -9,7 +9,6 @@ using Turbophrase.Services;
 using AApplication = Avalonia.Application;
 using AButton = Avalonia.Controls.Button;
 using ABrushes = Avalonia.Media.Brushes;
-using AColor = Avalonia.Media.Color;
 using AControl = Avalonia.Controls.Control;
 using ACornerRadius = Avalonia.CornerRadius;
 using ACursor = Avalonia.Input.Cursor;
@@ -47,8 +46,8 @@ public sealed class CommandPaletteWindow : Window
         ShowInTaskbar = false;
         Topmost = true;
         CanResize = false;
-        TransparencyLevelHint = [WindowTransparencyLevel.None];
-        Background = new SolidColorBrush(AColor.FromRgb(10, 14, 24));
+        TransparencyLevelHint = [WindowTransparencyLevel.Mica, WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.None];
+        Background = ABrushes.Transparent;
 
         _filterBox = new ATextBox
         {
@@ -137,7 +136,7 @@ public sealed class CommandPaletteWindow : Window
         var root = new Border
         {
             CornerRadius = new ACornerRadius(0),
-            Background = new SolidColorBrush(AColor.FromRgb(10, 14, 24)),
+            Background = Brush("TpAppBackground"),
             BorderThickness = new AThickness(0),
             Padding = new AThickness(24)
         };
@@ -153,7 +152,7 @@ public sealed class CommandPaletteWindow : Window
             ColumnDefinitions = new ColumnDefinitions("*,Auto")
         };
         var titleStack = new StackPanel { Spacing = 2 };
-        titleStack.Children.Add(new TextBlock { Text = "Command palette", FontSize = 26, FontWeight = FontWeight.SemiBold, LineHeight = 30 });
+        titleStack.Children.Add(new TextBlock { Text = "Command palette", FontSize = 24, FontWeight = FontWeight.SemiBold, LineHeight = 29 });
         titleStack.Children.Add(new TextBlock { Classes = { "muted" }, Text = "Type, choose, transform. No detours.", FontSize = 13 });
 
         var closeButton = new AButton { Classes = { "ghost" }, Content = "Esc", Padding = new AThickness(10, 6) };
@@ -235,10 +234,10 @@ public sealed class CommandPaletteWindow : Window
     {
         var border = new Border
         {
-            CornerRadius = new ACornerRadius(18),
+            CornerRadius = new ACornerRadius(6),
             BorderThickness = new AThickness(1),
-            BorderBrush = selected ? Brush("TpAccent2Brush") : Brush("TpStrokeBrush"),
-            Background = selected ? new SolidColorBrush(AColor.FromRgb(24, 43, 72)) : Brush("TpSurfaceRaisedBrush"),
+            BorderBrush = selected ? Brush("TpAccentBrush") : Brush("TpStrokeBrush"),
+            Background = selected ? Brush("TpAccentSoftBrush") : Brush("TpSurfaceRaisedBrush"),
             Padding = new AThickness(15, 11),
             Cursor = new ACursor(StandardCursorType.Hand)
         };
@@ -254,20 +253,16 @@ public sealed class CommandPaletteWindow : Window
         {
             Width = 28,
             Height = 28,
-            CornerRadius = new ACornerRadius(10),
+            CornerRadius = new ACornerRadius(4),
             BorderBrush = selected ? ABrushes.Transparent : Brush("TpStrokeStrongBrush"),
             BorderThickness = new AThickness(1),
-            Background = selected
-                ? new SolidColorBrush(AColor.FromRgb(165, 243, 252))
-                : new SolidColorBrush(AColor.FromRgb(17, 27, 45)),
+            Background = selected ? Brush("TpAccentBrush") : Brush("TpControlFillBrush"),
             Child = new TextBlock
             {
                 Text = operation.Number.ToString(),
                 FontWeight = FontWeight.SemiBold,
                 FontSize = 12,
-                Foreground = selected
-                    ? new SolidColorBrush(AColor.FromRgb(3, 13, 24))
-                    : Brush("TpMutedTextBrush"),
+                Foreground = selected ? Brush("TpAccentTextBrush") : Brush("TpMutedTextBrush"),
                 HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             }

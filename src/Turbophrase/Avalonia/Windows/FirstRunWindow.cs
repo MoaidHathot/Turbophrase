@@ -11,7 +11,6 @@ using AApplication = Avalonia.Application;
 using ABrushes = Avalonia.Media.Brushes;
 using AButton = Avalonia.Controls.Button;
 using ACheckBox = Avalonia.Controls.CheckBox;
-using AColor = Avalonia.Media.Color;
 using AControl = Avalonia.Controls.Control;
 using AHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 using AOrientation = Avalonia.Layout.Orientation;
@@ -74,7 +73,8 @@ public sealed class FirstRunWindow : Window
         ShowInTaskbar = true;
         ShowActivated = true;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        Background = AApplication.Current?.FindResource("TpAppBackground") as IBrush ?? Brush("TpVoidBrush");
+        TransparencyLevelHint = [WindowTransparencyLevel.Mica, WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.None];
+        Background = ABrushes.Transparent;
 
         _backButton.Click += (_, _) => GoToStep(_step - 1);
         _nextButton.Click += async (_, _) => await OnNextClicked();
@@ -161,7 +161,9 @@ public sealed class FirstRunWindow : Window
         var hero = new Border
         {
             Background = AApplication.Current?.FindResource("TpHeroGradient") as IBrush ?? Brush("TpSurfaceBrush"),
-            Padding = new AThickness(30, 24),
+            BorderBrush = Brush("TpStrokeBrush"),
+            BorderThickness = new AThickness(0, 0, 0, 1),
+            Padding = new AThickness(30, 22),
             Child = new Grid
             {
                 ColumnDefinitions = new ColumnDefinitions("*,Auto"),
@@ -172,7 +174,7 @@ public sealed class FirstRunWindow : Window
                         Spacing = 5,
                         Children =
                         {
-                            new TextBlock { Text = "Set up Turbophrase", FontSize = 28, FontWeight = FontWeight.SemiBold },
+                            new TextBlock { Text = "Set up Turbophrase", FontSize = 26, FontWeight = FontWeight.SemiBold },
                             new TextBlock { Text = "Choose a provider once. You can refine everything later in Settings.", Classes = { "muted" }, FontSize = 13 }
                         }
                     },
@@ -299,8 +301,8 @@ public sealed class FirstRunWindow : Window
         return new Border
         {
             Classes = { "softCard" },
-            Background = active ? new SolidColorBrush(AColor.FromRgb(24, 43, 72)) : Brush("TpSurfaceRaisedBrush"),
-            BorderBrush = active ? Brush("TpAccent2Brush") : Brush("TpStrokeBrush"),
+            Background = active ? Brush("TpAccentSoftBrush") : Brush("TpSurfaceRaisedBrush"),
+            BorderBrush = active ? Brush("TpAccentBrush") : Brush("TpStrokeBrush"),
             Padding = new AThickness(12),
             Child = new Grid
             {
@@ -312,12 +314,12 @@ public sealed class FirstRunWindow : Window
                     {
                         Width = 28,
                         Height = 28,
-                        CornerRadius = new CornerRadius(10),
-                        Background = active ? Brush("TpAccent2Brush") : Brush("TpSurfaceBrush"),
+                        CornerRadius = new CornerRadius(4),
+                        Background = active ? Brush("TpAccentBrush") : Brush("TpSurfaceBrush"),
                         Child = new TextBlock
                         {
                             Text = number,
-                            Foreground = active ? Brush("TpVoidBrush") : Brush("TpTextBrush"),
+                            Foreground = active ? Brush("TpAccentTextBrush") : Brush("TpTextBrush"),
                             FontWeight = FontWeight.SemiBold,
                             HorizontalAlignment = AHorizontalAlignment.Center,
                             VerticalAlignment = VerticalAlignment.Center
@@ -405,8 +407,8 @@ public sealed class FirstRunWindow : Window
         var card = new Border
         {
             Classes = { "softCard" },
-            Background = selected ? new SolidColorBrush(AColor.FromRgb(24, 43, 72)) : Brush("TpSurfaceRaisedBrush"),
-            BorderBrush = selected ? Brush("TpAccent2Brush") : Brush("TpStrokeBrush"),
+            Background = selected ? Brush("TpAccentSoftBrush") : Brush("TpSurfaceRaisedBrush"),
+            BorderBrush = selected ? Brush("TpAccentBrush") : Brush("TpStrokeBrush"),
             Padding = new AThickness(16, 13),
             Child = new Grid
             {
@@ -820,8 +822,8 @@ public sealed class FirstRunWindow : Window
 
     private static AControl Pill(string text) => new Border
     {
-        CornerRadius = new CornerRadius(999),
-        Background = new SolidColorBrush(AColor.FromRgb(17, 27, 45)),
+        CornerRadius = new CornerRadius(4),
+        Background = Brush("TpControlFillBrush"),
         BorderBrush = Brush("TpStrokeBrush"),
         BorderThickness = new AThickness(1),
         Padding = new AThickness(10, 5),

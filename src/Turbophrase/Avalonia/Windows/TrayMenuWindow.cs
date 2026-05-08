@@ -6,7 +6,6 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using AApplication = Avalonia.Application;
 using ABrushes = Avalonia.Media.Brushes;
-using AColor = Avalonia.Media.Color;
 using AControl = Avalonia.Controls.Control;
 using ACursor = Avalonia.Input.Cursor;
 using AThickness = Avalonia.Thickness;
@@ -28,8 +27,8 @@ public sealed class TrayMenuWindow : Window
         WindowDecorations = WindowDecorations.None;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.Manual;
-        TransparencyLevelHint = [WindowTransparencyLevel.None];
-        Background = AApplication.Current?.FindResource("TpAppBackground") as IBrush ?? Brush("TpVoidBrush");
+        TransparencyLevelHint = [WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.Mica, WindowTransparencyLevel.None];
+        Background = ABrushes.Transparent;
 
         var screen = DisplayPlacement.GetScreenNearCursor(Screens) ?? Screens.Primary;
         var scale = screen?.Scaling is > 0 ? screen.Scaling : 1;
@@ -58,7 +57,7 @@ public sealed class TrayMenuWindow : Window
             Spacing = 2,
             Children =
             {
-                new TextBlock { Text = "Turbophrase", FontSize = 22, FontWeight = FontWeight.SemiBold },
+                new TextBlock { Text = "Turbophrase", FontSize = 20, FontWeight = FontWeight.SemiBold },
                 new TextBlock { Text = "Quick actions and status", Classes = { "muted" }, FontSize = 12 }
             }
         });
@@ -71,7 +70,7 @@ public sealed class TrayMenuWindow : Window
         return new Border
         {
             Classes = { "card" },
-            Padding = new AThickness(16),
+            Padding = new AThickness(14),
             Child = new ScrollViewer
             {
                 MaxHeight = MaxHeight,
@@ -98,10 +97,10 @@ public sealed class TrayMenuWindow : Window
         var border = new Border
         {
             Classes = { "softCard" },
-            Background = item.Checked ? new SolidColorBrush(AColor.FromRgb(24, 43, 72)) : Brush("TpSurfaceRaisedBrush"),
-            BorderBrush = item.Checked ? Brush("TpAccent2Brush") : Brush("TpStrokeBrush"),
+            Background = item.Checked ? Brush("TpAccentSoftBrush") : Brush("TpSurfaceRaisedBrush"),
+            BorderBrush = item.Checked ? Brush("TpAccentBrush") : Brush("TpStrokeBrush"),
             Opacity = item.Enabled ? 1 : 0.48,
-            Padding = new AThickness(12, 9),
+            Padding = new AThickness(10, 8),
             Cursor = item.Enabled && item.InvokeAsync != null ? new ACursor(StandardCursorType.Hand) : null,
             Child = new Grid
             {

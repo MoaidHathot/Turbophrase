@@ -45,6 +45,11 @@ public static class AvaloniaUiHost
         try
         {
             TurbophraseAvaloniaApp.BuildAvaloniaApp().SetupWithoutStarting();
+            if (global::Avalonia.Application.Current is TurbophraseAvaloniaApp app)
+            {
+                app.ApplyPlatformSettings();
+            }
+
             Ready.Set();
             Dispatcher.UIThread.MainLoop(CancellationToken.None);
         }

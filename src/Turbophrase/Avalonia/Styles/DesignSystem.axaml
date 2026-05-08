@@ -1,65 +1,82 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <Styles.Resources>
-    <Color x:Key="TpVoidColor">#050812</Color>
-    <Color x:Key="TpShellColor">#08111F</Color>
-    <Color x:Key="TpSurfaceColor">#0D1525</Color>
-    <Color x:Key="TpSurfaceRaisedColor">#121D30</Color>
-    <Color x:Key="TpSurfaceHoverColor">#1A2A44</Color>
-    <Color x:Key="TpStrokeColor">#22324A</Color>
-    <Color x:Key="TpStrokeStrongColor">#526986</Color>
-    <Color x:Key="TpTextColor">#F5F7FB</Color>
-    <Color x:Key="TpMutedTextColor">#9DAAC0</Color>
-    <Color x:Key="TpSubtleTextColor">#708099</Color>
-    <Color x:Key="TpAccentColor">#8B5CF6</Color>
-    <Color x:Key="TpAccent2Color">#22D3EE</Color>
-    <Color x:Key="TpSuccessColor">#34D399</Color>
-    <Color x:Key="TpDangerColor">#FB7185</Color>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="TpVoidBrush" Color="#FFF3F3F3" />
+          <SolidColorBrush x:Key="TpShellBrush" Color="#FFFAFAFA" />
+          <SolidColorBrush x:Key="TpAppBackground" Color="#EAF3F3F3" />
+          <SolidColorBrush x:Key="TpHeroGradient" Color="#EAF8F8F8" />
+          <SolidColorBrush x:Key="TpSurfaceBrush" Color="#F8FFFFFF" />
+          <SolidColorBrush x:Key="TpSurfaceRaisedBrush" Color="#FFFFFFFF" />
+          <SolidColorBrush x:Key="TpSurfaceHoverBrush" Color="#FFF6F6F6" />
+          <SolidColorBrush x:Key="TpControlFillBrush" Color="#FFFBFBFB" />
+          <SolidColorBrush x:Key="TpControlHoverBrush" Color="#FFF6F6F6" />
+          <SolidColorBrush x:Key="TpControlPressedBrush" Color="#FFEDEDED" />
+          <SolidColorBrush x:Key="TpStrokeBrush" Color="#33000000" />
+          <SolidColorBrush x:Key="TpStrokeStrongBrush" Color="#66000000" />
+          <SolidColorBrush x:Key="TpTextBrush" Color="#FF1A1A1A" />
+          <SolidColorBrush x:Key="TpMutedTextBrush" Color="#FF5E5E5E" />
+          <SolidColorBrush x:Key="TpSubtleTextBrush" Color="#FF767676" />
+          <SolidColorBrush x:Key="TpSuccessBrush" Color="#FF0F7B0F" />
+          <SolidColorBrush x:Key="TpDangerBrush" Color="#FFC42B1C" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="TpVoidBrush" Color="#FF202020" />
+          <SolidColorBrush x:Key="TpShellBrush" Color="#FF1F1F1F" />
+          <SolidColorBrush x:Key="TpAppBackground" Color="#E0202020" />
+          <SolidColorBrush x:Key="TpHeroGradient" Color="#E02A2A2A" />
+          <SolidColorBrush x:Key="TpSurfaceBrush" Color="#D82B2B2B" />
+          <SolidColorBrush x:Key="TpSurfaceRaisedBrush" Color="#E0333333" />
+          <SolidColorBrush x:Key="TpSurfaceHoverBrush" Color="#FF3A3A3A" />
+          <SolidColorBrush x:Key="TpControlFillBrush" Color="#FF2D2D2D" />
+          <SolidColorBrush x:Key="TpControlHoverBrush" Color="#FF3A3A3A" />
+          <SolidColorBrush x:Key="TpControlPressedBrush" Color="#FF242424" />
+          <SolidColorBrush x:Key="TpStrokeBrush" Color="#33FFFFFF" />
+          <SolidColorBrush x:Key="TpStrokeStrongBrush" Color="#52FFFFFF" />
+          <SolidColorBrush x:Key="TpTextBrush" Color="#FFFFFFFF" />
+          <SolidColorBrush x:Key="TpMutedTextBrush" Color="#FFC8C8C8" />
+          <SolidColorBrush x:Key="TpSubtleTextBrush" Color="#FF9A9A9A" />
+          <SolidColorBrush x:Key="TpSuccessBrush" Color="#FF6CCB5F" />
+          <SolidColorBrush x:Key="TpDangerBrush" Color="#FFFF99A4" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
 
-    <SolidColorBrush x:Key="TpVoidBrush" Color="{StaticResource TpVoidColor}" />
-    <SolidColorBrush x:Key="TpShellBrush" Color="{StaticResource TpShellColor}" />
-    <SolidColorBrush x:Key="TpSurfaceBrush" Color="{StaticResource TpSurfaceColor}" />
-    <SolidColorBrush x:Key="TpSurfaceRaisedBrush" Color="{StaticResource TpSurfaceRaisedColor}" />
-    <SolidColorBrush x:Key="TpSurfaceHoverBrush" Color="{StaticResource TpSurfaceHoverColor}" />
-    <SolidColorBrush x:Key="TpStrokeBrush" Color="{StaticResource TpStrokeColor}" />
-    <SolidColorBrush x:Key="TpStrokeStrongBrush" Color="{StaticResource TpStrokeStrongColor}" />
-    <SolidColorBrush x:Key="TpTextBrush" Color="{StaticResource TpTextColor}" />
-    <SolidColorBrush x:Key="TpMutedTextBrush" Color="{StaticResource TpMutedTextColor}" />
-    <SolidColorBrush x:Key="TpSubtleTextBrush" Color="{StaticResource TpSubtleTextColor}" />
-    <SolidColorBrush x:Key="TpAccentBrush" Color="{StaticResource TpAccentColor}" />
-    <SolidColorBrush x:Key="TpAccent2Brush" Color="{StaticResource TpAccent2Color}" />
-    <SolidColorBrush x:Key="TpSuccessBrush" Color="{StaticResource TpSuccessColor}" />
-    <SolidColorBrush x:Key="TpDangerBrush" Color="{StaticResource TpDangerColor}" />
+      <Color x:Key="TpAccentColor">#0078D4</Color>
+      <Color x:Key="TpAccentHoverColor">#106EBE</Color>
+      <Color x:Key="TpAccentPressedColor">#005A9E</Color>
+      <Color x:Key="TpAccentSoftColor">#330078D4</Color>
+      <Color x:Key="TpAccentSelectionColor">#550078D4</Color>
+      <Color x:Key="TpAccentTextColor">#FFFFFFFF</Color>
 
-    <LinearGradientBrush x:Key="TpHeroGradient" StartPoint="0%,0%" EndPoint="100%,100%">
-      <GradientStop Color="#20124D" Offset="0" />
-      <GradientStop Color="#0E7490" Offset="0.52" />
-      <GradientStop Color="#07111F" Offset="1" />
-    </LinearGradientBrush>
-    <LinearGradientBrush x:Key="TpAppBackground" StartPoint="0%,0%" EndPoint="100%,100%">
-      <GradientStop Color="#050812" Offset="0" />
-      <GradientStop Color="#091827" Offset="0.48" />
-      <GradientStop Color="#11102A" Offset="1" />
-    </LinearGradientBrush>
+      <SolidColorBrush x:Key="TpAccentBrush" Color="{StaticResource TpAccentColor}" />
+      <SolidColorBrush x:Key="TpAccent2Brush" Color="{StaticResource TpAccentColor}" />
+      <SolidColorBrush x:Key="TpAccentHoverBrush" Color="{StaticResource TpAccentHoverColor}" />
+      <SolidColorBrush x:Key="TpAccentPressedBrush" Color="{StaticResource TpAccentPressedColor}" />
+      <SolidColorBrush x:Key="TpAccentSoftBrush" Color="{StaticResource TpAccentSoftColor}" />
+      <SolidColorBrush x:Key="TpAccentSelectionBrush" Color="{StaticResource TpAccentSelectionColor}" />
+      <SolidColorBrush x:Key="TpAccentTextBrush" Color="{StaticResource TpAccentTextColor}" />
+    </ResourceDictionary>
   </Styles.Resources>
 
   <Style Selector="Window">
-    <Setter Property="FontFamily" Value="Inter, Segoe UI" />
-    <Setter Property="Background" Value="{StaticResource TpAppBackground}" />
-    <Setter Property="Foreground" Value="{StaticResource TpTextBrush}" />
+    <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI" />
+    <Setter Property="Background" Value="{DynamicResource TpAppBackground}" />
+    <Setter Property="Foreground" Value="{DynamicResource TpTextBrush}" />
   </Style>
 
   <Style Selector="TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource TpTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TpTextBrush}" />
     <Setter Property="TextWrapping" Value="Wrap" />
   </Style>
 
   <Style Selector="TextBlock.muted">
-    <Setter Property="Foreground" Value="{StaticResource TpMutedTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TpMutedTextBrush}" />
   </Style>
 
   <Style Selector="TextBlock.subtle">
-    <Setter Property="Foreground" Value="{StaticResource TpSubtleTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TpSubtleTextBrush}" />
   </Style>
 
   <Style Selector="TextBlock.title">
@@ -74,62 +91,83 @@
   </Style>
 
   <Style Selector="Border.card">
-    <Setter Property="Background" Value="{StaticResource TpSurfaceBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource TpStrokeBrush}" />
+    <Setter Property="Background" Value="{DynamicResource TpSurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TpStrokeBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="24" />
+    <Setter Property="CornerRadius" Value="8" />
   </Style>
 
   <Style Selector="Border.softCard">
-    <Setter Property="Background" Value="{StaticResource TpSurfaceRaisedBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource TpStrokeBrush}" />
+    <Setter Property="Background" Value="{DynamicResource TpSurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TpStrokeBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="CornerRadius" Value="6" />
   </Style>
 
   <Style Selector="TextBox">
-    <Setter Property="Background" Value="{StaticResource TpSurfaceRaisedBrush}" />
-    <Setter Property="Foreground" Value="{StaticResource TpTextBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource TpStrokeBrush}" />
+    <Setter Property="Background" Value="{DynamicResource TpControlFillBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TpTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TpStrokeBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="14" />
-    <Setter Property="Padding" Value="13,9" />
-    <Setter Property="SelectionBrush" Value="#558B5CF6" />
-    <Setter Property="CaretBrush" Value="{StaticResource TpAccent2Brush}" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="11,7" />
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="SelectionBrush" Value="{DynamicResource TpAccentSelectionBrush}" />
+    <Setter Property="CaretBrush" Value="{DynamicResource TpAccentBrush}" />
   </Style>
 
   <Style Selector="TextBox:focus">
-    <Setter Property="BorderBrush" Value="{StaticResource TpAccentBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TpAccentBrush}" />
   </Style>
 
   <Style Selector="ComboBox">
-    <Setter Property="Background" Value="{StaticResource TpSurfaceRaisedBrush}" />
-    <Setter Property="Foreground" Value="{StaticResource TpTextBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource TpStrokeBrush}" />
+    <Setter Property="Background" Value="{DynamicResource TpControlFillBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TpTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TpStrokeBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="14" />
-    <Setter Property="Padding" Value="13,9" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="11,7" />
+    <Setter Property="MinHeight" Value="32" />
+  </Style>
+
+  <Style Selector="ComboBox:focus-within">
+    <Setter Property="BorderBrush" Value="{DynamicResource TpAccentBrush}" />
   </Style>
 
   <Style Selector="Button">
-    <Setter Property="Background" Value="{StaticResource TpSurfaceRaisedBrush}" />
-    <Setter Property="Foreground" Value="{StaticResource TpTextBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource TpStrokeBrush}" />
+    <Setter Property="Background" Value="{DynamicResource TpControlFillBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TpTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TpStrokeBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="999" />
-    <Setter Property="Padding" Value="16,9" />
-    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Padding" Value="14,5" />
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="FontWeight" Value="Normal" />
   </Style>
 
   <Style Selector="Button:pointerover">
-    <Setter Property="Background" Value="{StaticResource TpSurfaceHoverBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource TpStrokeStrongBrush}" />
+    <Setter Property="Background" Value="{DynamicResource TpControlHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TpStrokeStrongBrush}" />
+  </Style>
+
+  <Style Selector="Button:pressed">
+    <Setter Property="Background" Value="{DynamicResource TpControlPressedBrush}" />
   </Style>
 
   <Style Selector="Button.primary">
-    <Setter Property="Background" Value="{StaticResource TpAccentBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource TpAccentBrush}" />
-    <Setter Property="Foreground" Value="White" />
+    <Setter Property="Background" Value="{DynamicResource TpAccentBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TpAccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TpAccentTextBrush}" />
+  </Style>
+
+  <Style Selector="Button.primary:pointerover">
+    <Setter Property="Background" Value="{DynamicResource TpAccentHoverBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TpAccentHoverBrush}" />
+  </Style>
+
+  <Style Selector="Button.primary:pressed">
+    <Setter Property="Background" Value="{DynamicResource TpAccentPressedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TpAccentPressedBrush}" />
   </Style>
 
   <Style Selector="Button.ghost">
@@ -138,7 +176,7 @@
   </Style>
 
   <Style Selector="CheckBox">
-    <Setter Property="Foreground" Value="{StaticResource TpTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TpTextBrush}" />
   </Style>
 
   <Style Selector="ListBox">
@@ -147,23 +185,24 @@
   </Style>
 
   <Style Selector="ListBoxItem">
-    <Setter Property="Foreground" Value="{StaticResource TpTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TpTextBrush}" />
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Padding" Value="0" />
-    <Setter Property="Margin" Value="0,0,0,8" />
+    <Setter Property="Padding" Value="8,6" />
+    <Setter Property="Margin" Value="0,0,0,2" />
+    <Setter Property="MinHeight" Value="32" />
   </Style>
 
   <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
-    <Setter Property="Background" Value="#141F32" />
-    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Background" Value="{DynamicResource TpSurfaceHoverBrush}" />
+    <Setter Property="CornerRadius" Value="4" />
   </Style>
 
   <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
-    <Setter Property="Background" Value="#1B2B49" />
-    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Background" Value="{DynamicResource TpAccentSoftBrush}" />
+    <Setter Property="CornerRadius" Value="4" />
   </Style>
 
   <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
-    <Setter Property="Foreground" Value="{StaticResource TpTextBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TpTextBrush}" />
   </Style>
 </Styles>

@@ -8,7 +8,6 @@ using Avalonia.Threading;
 using AApplication = Avalonia.Application;
 using AButton = Avalonia.Controls.Button;
 using ABrushes = Avalonia.Media.Brushes;
-using AColor = Avalonia.Media.Color;
 using AComboBox = Avalonia.Controls.ComboBox;
 using AControl = Avalonia.Controls.Control;
 using ATextBox = Avalonia.Controls.TextBox;
@@ -40,8 +39,8 @@ public sealed class PromptCommandWindow : Window
         ShowInTaskbar = false;
         Topmost = true;
         CanResize = false;
-        TransparencyLevelHint = [WindowTransparencyLevel.None];
-        Background = new SolidColorBrush(AColor.FromRgb(10, 14, 24));
+        TransparencyLevelHint = [WindowTransparencyLevel.Mica, WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.None];
+        Background = ABrushes.Transparent;
 
         _promptBox = new ATextBox
         {
@@ -154,7 +153,7 @@ public sealed class PromptCommandWindow : Window
         var root = new Border
         {
             CornerRadius = new CornerRadius(0),
-            Background = new SolidColorBrush(AColor.FromRgb(10, 14, 24)),
+            Background = Brush("TpAppBackground"),
             BorderThickness = new AThickness(0),
             Padding = new AThickness(24)
         };
@@ -167,7 +166,7 @@ public sealed class PromptCommandWindow : Window
 
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         var titleStack = new StackPanel { Spacing = 2 };
-        titleStack.Children.Add(new TextBlock { Text = "Custom prompt", FontSize = 26, FontWeight = FontWeight.SemiBold, LineHeight = 30 });
+        titleStack.Children.Add(new TextBlock { Text = "Custom prompt", FontSize = 24, FontWeight = FontWeight.SemiBold, LineHeight = 29 });
         titleStack.Children.Add(new TextBlock { Classes = { "muted" }, Text = "Describe the transformation. Turbophrase handles the selected text.", FontSize = 13 });
 
         var closeButton = new AButton { Classes = { "ghost" }, Content = "Esc", Padding = new AThickness(10, 6) };

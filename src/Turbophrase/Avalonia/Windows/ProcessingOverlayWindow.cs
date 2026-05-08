@@ -32,7 +32,7 @@ public sealed class ProcessingOverlayWindow : Window
         Topmost = true;
         WindowDecorations = WindowDecorations.None;
         WindowStartupLocation = WindowStartupLocation.Manual;
-        TransparencyLevelHint = [WindowTransparencyLevel.None];
+        TransparencyLevelHint = [WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.None];
         Background = ABrushes.Transparent;
 
         _label.Text = BaseText;
@@ -44,9 +44,9 @@ public sealed class ProcessingOverlayWindow : Window
         Content = new Border
         {
             Classes = { "softCard" },
-            Background = AApplication.Current?.FindResource("TpSurfaceRaisedBrush") as IBrush ?? new SolidColorBrush(AColor.FromRgb(18, 29, 48)),
+            Background = AApplication.Current?.FindResource("TpSurfaceRaisedBrush") as IBrush ?? new SolidColorBrush(AColor.FromRgb(51, 51, 51)),
             BorderBrush = AApplication.Current?.FindResource("TpStrokeStrongBrush") as IBrush ?? Brush("TpStrokeBrush"),
-            CornerRadius = new CornerRadius(18),
+            CornerRadius = new CornerRadius(8),
             Padding = new AThickness(18, 10),
             Child = _label
         };

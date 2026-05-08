@@ -5,7 +5,6 @@ using Avalonia.Media;
 using AApplication = Avalonia.Application;
 using ABrushes = Avalonia.Media.Brushes;
 using AButton = Avalonia.Controls.Button;
-using AColor = Avalonia.Media.Color;
 using AControl = Avalonia.Controls.Control;
 using AHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 using AThickness = Avalonia.Thickness;
@@ -29,7 +28,8 @@ public sealed class AppMessageWindow : Window
         CanResize = true;
         ShowInTaskbar = true;
         WindowStartupLocation = WindowStartupLocation.Manual;
-        Background = AApplication.Current?.FindResource("TpAppBackground") as IBrush ?? Brush("TpVoidBrush");
+        TransparencyLevelHint = [WindowTransparencyLevel.Mica, WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.None];
+        Background = ABrushes.Transparent;
 
         var close = new AButton { Classes = { "primary" }, Content = "Close", MinWidth = 96 };
         close.Click += (_, _) => Close();
@@ -49,7 +49,7 @@ public sealed class AppMessageWindow : Window
                         Spacing = 4,
                         Children =
                         {
-                            new TextBlock { Text = title, FontSize = 24, FontWeight = FontWeight.SemiBold },
+                            new TextBlock { Text = title, FontSize = 22, FontWeight = FontWeight.SemiBold },
                             new TextBlock
                             {
                                 Text = isError ? "Turbophrase could not continue." : "Turbophrase",

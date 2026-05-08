@@ -13,7 +13,6 @@ using Turbophrase.Services;
 using AApplication = Avalonia.Application;
 using AButton = Avalonia.Controls.Button;
 using ABrushes = Avalonia.Media.Brushes;
-using AColor = Avalonia.Media.Color;
 using AComboBox = Avalonia.Controls.ComboBox;
 using AControl = Avalonia.Controls.Control;
 using ACheckBox = Avalonia.Controls.CheckBox;
@@ -87,7 +86,8 @@ public sealed class SettingsWindow : Window
         MinWidth = 960;
         MinHeight = 620;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        Background = AApplication.Current?.FindResource("TpAppBackground") as IBrush ?? Brush("TpVoidBrush");
+        TransparencyLevelHint = [WindowTransparencyLevel.Mica, WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.None];
+        Background = ABrushes.Transparent;
 
         _closeButton = new AButton { Content = "Close", MinWidth = 96, Command = new RelayCommand(RequestClose) };
 
@@ -113,7 +113,9 @@ public sealed class SettingsWindow : Window
         var hero = new Border
         {
             Background = AApplication.Current?.FindResource("TpHeroGradient") as IBrush ?? Brush("TpSurfaceBrush"),
-            Padding = new AThickness(30, 24),
+            BorderBrush = Brush("TpStrokeBrush"),
+            BorderThickness = new AThickness(0, 0, 0, 1),
+            Padding = new AThickness(30, 22),
             Child = new Grid
             {
                 ColumnDefinitions = new ColumnDefinitions("*,Auto"),
@@ -124,7 +126,7 @@ public sealed class SettingsWindow : Window
                         Spacing = 4,
                         Children =
                         {
-                            new TextBlock { Text = "Turbophrase", FontSize = 28, FontWeight = FontWeight.SemiBold },
+                            new TextBlock { Text = "Turbophrase", FontSize = 26, FontWeight = FontWeight.SemiBold },
                             new TextBlock { Text = "Configure providers, prompts, hotkeys, and runtime behavior.", Classes = { "muted" }, FontSize = 13 }
                         }
                     }
