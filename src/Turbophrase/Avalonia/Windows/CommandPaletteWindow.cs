@@ -20,6 +20,10 @@ namespace Turbophrase.Avalonia.Windows;
 
 public sealed class CommandPaletteWindow : Window
 {
+    private const int VisibleRowsBeforeScroll = 10;
+    private const double RowHeight = 32;
+    private const double RowSpacing = 4;
+
     private readonly ATextBox _filterBox;
     private readonly StackPanel _itemsPanel;
     private readonly TextBlock _statusText;
@@ -52,13 +56,13 @@ public sealed class CommandPaletteWindow : Window
         _filterBox = new ATextBox
         {
             PlaceholderText = "Search actions or type a row number...",
-            FontSize = 15,
-            MinHeight = 48,
+            FontSize = 14,
+            MinHeight = 38,
             VerticalContentAlignment = VerticalAlignment.Center
         };
         _filterBox.TextChanged += (_, _) => ApplyFilter();
 
-        _itemsPanel = new StackPanel { Spacing = 8 };
+        _itemsPanel = new StackPanel { Spacing = RowSpacing };
         _statusText = new TextBlock
         {
             Classes = { "muted" },
@@ -138,13 +142,13 @@ public sealed class CommandPaletteWindow : Window
             CornerRadius = new ACornerRadius(0),
             Background = Brush("TpAppBackground"),
             BorderThickness = new AThickness(0),
-            Padding = new AThickness(24)
+            Padding = new AThickness(18)
         };
 
         var layout = new Grid
         {
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"),
-            RowSpacing = 14
+            RowSpacing = 10
         };
 
         var header = new Grid
@@ -152,7 +156,7 @@ public sealed class CommandPaletteWindow : Window
             ColumnDefinitions = new ColumnDefinitions("*,Auto")
         };
         var titleStack = new StackPanel { Spacing = 2 };
-        titleStack.Children.Add(new TextBlock { Text = "Command palette", FontSize = 24, FontWeight = FontWeight.SemiBold, LineHeight = 29 });
+        titleStack.Children.Add(new TextBlock { Text = "Command palette", FontSize = 22, FontWeight = FontWeight.SemiBold, LineHeight = 27 });
         titleStack.Children.Add(new TextBlock { Classes = { "muted" }, Text = "Type, choose, transform. No detours.", FontSize = 13 });
 
         var closeButton = new AButton { Classes = { "ghost" }, Content = "Esc", Padding = new AThickness(10, 6) };
@@ -186,9 +190,10 @@ public sealed class CommandPaletteWindow : Window
 
     private double GetListHeight()
     {
-        var desired = _allOperations.Count * 63 + 12;
-        var available = (Screens.Primary?.WorkingArea.Height ?? 900) - 240;
-        return Math.Clamp(desired, 260, Math.Max(260, available));
+        var visibleRows = Math.Min(_allOperations.Count, VisibleRowsBeforeScroll);
+        var desired = visibleRows * RowHeight + Math.Max(0, visibleRows - 1) * RowSpacing;
+        var available = (Screens.Primary?.WorkingArea.Height ?? 900) - 210;
+        return Math.Min(desired, Math.Max(RowHeight, available));
     }
 
     private void ApplyFilter()
@@ -234,62 +239,52 @@ public sealed class CommandPaletteWindow : Window
     {
         var border = new Border
         {
+            Height = RowHeight,
             CornerRadius = new ACornerRadius(6),
             BorderThickness = new AThickness(1),
             BorderBrush = selected ? Brush("TpAccentBrush") : Brush("TpStrokeBrush"),
             Background = selected ? Brush("TpAccentSoftBrush") : Brush("TpSurfaceRaisedBrush"),
-            Padding = new AThickness(15, 11),
+            Padding = new AThickness(8, 0),
             Cursor = new ACursor(StandardCursorType.Hand)
         };
 
         var grid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("42,*"),
-            RowDefinitions = new RowDefinitions("Auto,Auto"),
+            ColumnDefinitions = new ColumnDefinitions("26,*"),
             ColumnSpacing = 8
         };
 
         var number = new Border
         {
-            Width = 28,
-            Height = 28,
+            Width = 26,
+            Height = 22,
             CornerRadius = new ACornerRadius(4),
-            BorderBrush = selected ? ABrushes.Transparent : Brush("TpStrokeStrongBrush"),
+            BorderBrush = selected ? Brush("TpAccentBrush") : Brush("TpStrokeStrongBrush"),
             BorderThickness = new AThickness(1),
             Background = selected ? Brush("TpAccentBrush") : Brush("TpControlFillBrush"),
+            VerticalAlignment = VerticalAlignment.Center,
             Child = new TextBlock
             {
                 Text = operation.Number.ToString(),
                 FontWeight = FontWeight.SemiBold,
-                FontSize = 12,
-                Foreground = selected ? Brush("TpAccentTextBrush") : Brush("TpMutedTextBrush"),
+                FontSize = 11,
+                Foreground = selected ? Brush("TpAccentTextBrush") : Brush("TpTextBrush"),
                 HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             }
         };
-        Grid.SetRowSpan(number, 2);
         grid.Children.Add(number);
 
         var name = new TextBlock
         {
             Text = operation.DisplayName,
-            FontSize = 14,
+            FontSize = 13,
             FontWeight = FontWeight.SemiBold,
-            TextTrimming = TextTrimming.CharacterEllipsis
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
         };
         Grid.SetColumn(name, 1);
         grid.Children.Add(name);
-
-        var id = new TextBlock
-        {
-            Classes = { "muted" },
-            Text = operation.Id,
-            FontSize = 12,
-            TextTrimming = TextTrimming.CharacterEllipsis
-        };
-        Grid.SetColumn(id, 1);
-        Grid.SetRow(id, 1);
-        grid.Children.Add(id);
 
         border.Child = grid;
         border.PointerPressed += (_, _) =>
@@ -368,6 +363,8 @@ public sealed class CommandPaletteWindow : Window
             && operation.Number.ToString().Contains(filter, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static IBrush Brush(string key) =>
-        AApplication.Current?.FindResource(key) as IBrush ?? ABrushes.Transparent;
+    private IBrush Brush(string key) =>
+        TryGetResource(key, ActualThemeVariant, out var resource) && resource is IBrush brush
+            ? brush
+            : AApplication.Current?.FindResource(key) as IBrush ?? ABrushes.Transparent;
 }

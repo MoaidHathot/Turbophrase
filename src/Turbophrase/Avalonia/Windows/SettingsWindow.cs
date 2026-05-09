@@ -107,12 +107,12 @@ public sealed class SettingsWindow : Window
         var root = new Grid
         {
             RowDefinitions = new RowDefinitions("Auto,*"),
-            Background = AApplication.Current?.FindResource("TpAppBackground") as IBrush ?? Brush("TpVoidBrush")
+            Background = Brush("TpAppBackground")
         };
 
         var hero = new Border
         {
-            Background = AApplication.Current?.FindResource("TpHeroGradient") as IBrush ?? Brush("TpSurfaceBrush"),
+            Background = Brush("TpHeroGradient"),
             BorderBrush = Brush("TpStrokeBrush"),
             BorderThickness = new AThickness(0, 0, 0, 1),
             Padding = new AThickness(30, 22),
@@ -1582,9 +1582,11 @@ public sealed class SettingsWindow : Window
             SizeToContent = SizeToContent.Height,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = AApplication.Current?.FindResource("TpAppBackground") as IBrush ?? Brush("TpVoidBrush"),
+            TransparencyLevelHint = [WindowTransparencyLevel.Mica, WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.None],
+            Background = ABrushes.Transparent,
             Content = new Border
             {
+                Background = Brush("TpAppBackground"),
                 Padding = new AThickness(20),
                 Child = new StackPanel
                 {
@@ -1679,7 +1681,10 @@ public sealed class SettingsWindow : Window
         Process.Start(new ProcessStartInfo { FileName = isFolder ? "explorer.exe" : path, Arguments = isFolder ? $"\"{path}\"" : string.Empty, UseShellExecute = true });
     }
 
-    private static IBrush Brush(string key) => AApplication.Current?.FindResource(key) as IBrush ?? ABrushes.Transparent;
+    private IBrush Brush(string key) =>
+        TryGetResource(key, ActualThemeVariant, out var resource) && resource is IBrush brush
+            ? brush
+            : AApplication.Current?.FindResource(key) as IBrush ?? ABrushes.Transparent;
 
     private sealed class RelayCommand(Action execute) : System.Windows.Input.ICommand
     {

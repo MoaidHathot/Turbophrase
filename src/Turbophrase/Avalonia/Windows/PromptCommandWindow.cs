@@ -22,6 +22,7 @@ public sealed class PromptCommandWindow : Window
     private readonly AComboBox _providerBox;
     private readonly List<string> _providers;
     private readonly TextBlock _statusText;
+    private readonly TextBlock _shortcutHint;
     private readonly AButton _runButton;
     private bool _activateWhenOpened;
     private bool _captureReady;
@@ -68,6 +69,13 @@ public sealed class PromptCommandWindow : Window
             Text = "Capturing selected text...",
             FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center
+        };
+
+        _shortcutHint = new TextBlock
+        {
+            Classes = { "subtle" },
+            Text = "Shortcuts: Ctrl+Enter runs, Esc cancels, Ctrl+Up/Down changes provider, Alt+1-9 jumps provider.",
+            FontSize = 12
         };
 
         _runButton = new AButton
@@ -199,8 +207,13 @@ public sealed class PromptCommandWindow : Window
         Grid.SetRow(providerRow, 2);
         layout.Children.Add(providerRow);
 
-        Grid.SetRow(_statusText, 3);
-        layout.Children.Add(_statusText);
+        var footer = new StackPanel
+        {
+            Spacing = 4,
+            Children = { _statusText, _shortcutHint }
+        };
+        Grid.SetRow(footer, 3);
+        layout.Children.Add(footer);
 
         root.Child = layout;
         return root;
@@ -323,6 +336,8 @@ public sealed class PromptCommandWindow : Window
 
     private void Cancel() => Close();
 
-    private static IBrush Brush(string key) =>
-        AApplication.Current?.FindResource(key) as IBrush ?? ABrushes.Transparent;
+    private IBrush Brush(string key) =>
+        TryGetResource(key, ActualThemeVariant, out var resource) && resource is IBrush brush
+            ? brush
+            : AApplication.Current?.FindResource(key) as IBrush ?? ABrushes.Transparent;
 }
