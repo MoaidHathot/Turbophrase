@@ -6,12 +6,12 @@
         <ResourceDictionary x:Key="Light">
           <SolidColorBrush x:Key="TpVoidBrush" Color="#FFF3F3F3" />
           <SolidColorBrush x:Key="TpShellBrush" Color="#FFFAFAFA" />
-          <SolidColorBrush x:Key="TpAppBackground" Color="#EAF3F3F3" />
-          <SolidColorBrush x:Key="TpHeroGradient" Color="#EAF8F8F8" />
-          <SolidColorBrush x:Key="TpSurfaceBrush" Color="#F8FFFFFF" />
-          <SolidColorBrush x:Key="TpSurfaceRaisedBrush" Color="#FFFFFFFF" />
+          <SolidColorBrush x:Key="TpAppBackground" Color="#B3F3F3F3" />
+          <SolidColorBrush x:Key="TpHeroGradient" Color="#A8F8F8F8" />
+          <SolidColorBrush x:Key="TpSurfaceBrush" Color="#C8FFFFFF" />
+          <SolidColorBrush x:Key="TpSurfaceRaisedBrush" Color="#D9FFFFFF" />
           <SolidColorBrush x:Key="TpSurfaceHoverBrush" Color="#FFF6F6F6" />
-          <SolidColorBrush x:Key="TpControlFillBrush" Color="#FFFBFBFB" />
+          <SolidColorBrush x:Key="TpControlFillBrush" Color="#F2FBFBFB" />
           <SolidColorBrush x:Key="TpControlHoverBrush" Color="#FFF6F6F6" />
           <SolidColorBrush x:Key="TpControlPressedBrush" Color="#FFEDEDED" />
           <SolidColorBrush x:Key="TpStrokeBrush" Color="#33000000" />
@@ -25,12 +25,12 @@
         <ResourceDictionary x:Key="Dark">
           <SolidColorBrush x:Key="TpVoidBrush" Color="#FF202020" />
           <SolidColorBrush x:Key="TpShellBrush" Color="#FF1F1F1F" />
-          <SolidColorBrush x:Key="TpAppBackground" Color="#E0202020" />
-          <SolidColorBrush x:Key="TpHeroGradient" Color="#E02A2A2A" />
-          <SolidColorBrush x:Key="TpSurfaceBrush" Color="#D82B2B2B" />
-          <SolidColorBrush x:Key="TpSurfaceRaisedBrush" Color="#E0333333" />
+          <SolidColorBrush x:Key="TpAppBackground" Color="#B3202020" />
+          <SolidColorBrush x:Key="TpHeroGradient" Color="#A82A2A2A" />
+          <SolidColorBrush x:Key="TpSurfaceBrush" Color="#C82B2B2B" />
+          <SolidColorBrush x:Key="TpSurfaceRaisedBrush" Color="#D9333333" />
           <SolidColorBrush x:Key="TpSurfaceHoverBrush" Color="#FF3A3A3A" />
-          <SolidColorBrush x:Key="TpControlFillBrush" Color="#FF2D2D2D" />
+          <SolidColorBrush x:Key="TpControlFillBrush" Color="#F22D2D2D" />
           <SolidColorBrush x:Key="TpControlHoverBrush" Color="#FF3A3A3A" />
           <SolidColorBrush x:Key="TpControlPressedBrush" Color="#FF242424" />
           <SolidColorBrush x:Key="TpStrokeBrush" Color="#33FFFFFF" />

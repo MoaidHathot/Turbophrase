@@ -9,6 +9,7 @@ using Turbophrase.Services;
 using AApplication = Avalonia.Application;
 using AButton = Avalonia.Controls.Button;
 using ABrushes = Avalonia.Media.Brushes;
+using AColor = Avalonia.Media.Color;
 using AControl = Avalonia.Controls.Control;
 using ACornerRadius = Avalonia.CornerRadius;
 using ACursor = Avalonia.Input.Cursor;
@@ -261,14 +262,14 @@ public sealed class CommandPaletteWindow : Window
             CornerRadius = new ACornerRadius(4),
             BorderBrush = selected ? Brush("TpAccentBrush") : Brush("TpStrokeStrongBrush"),
             BorderThickness = new AThickness(1),
-            Background = selected ? Brush("TpAccentBrush") : Brush("TpControlFillBrush"),
+            Background = selected ? Brush("TpAccentBrush") : NeutralKeyBrush(),
             VerticalAlignment = VerticalAlignment.Center,
             Child = new TextBlock
             {
                 Text = operation.Number.ToString(),
                 FontWeight = FontWeight.SemiBold,
                 FontSize = 11,
-                Foreground = selected ? Brush("TpAccentTextBrush") : Brush("TpTextBrush"),
+                Foreground = selected ? Brush("TpAccentTextBrush") : NeutralKeyTextBrush(),
                 HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             }
@@ -367,4 +368,12 @@ public sealed class CommandPaletteWindow : Window
         TryGetResource(key, ActualThemeVariant, out var resource) && resource is IBrush brush
             ? brush
             : AApplication.Current?.FindResource(key) as IBrush ?? ABrushes.Transparent;
+
+    private IBrush NeutralKeyBrush() => ActualThemeVariant == global::Avalonia.Styling.ThemeVariant.Light
+        ? new SolidColorBrush(AColor.FromArgb(0xE6, 0xFF, 0xFF, 0xFF))
+        : new SolidColorBrush(AColor.FromArgb(0xE6, 0x2D, 0x2D, 0x2D));
+
+    private IBrush NeutralKeyTextBrush() => ActualThemeVariant == global::Avalonia.Styling.ThemeVariant.Light
+        ? new SolidColorBrush(AColor.FromRgb(0x1A, 0x1A, 0x1A))
+        : new SolidColorBrush(AColor.FromRgb(0xFF, 0xFF, 0xFF));
 }
