@@ -25,8 +25,8 @@
         <ResourceDictionary x:Key="Dark">
           <SolidColorBrush x:Key="TpVoidBrush" Color="#FF202020" />
           <SolidColorBrush x:Key="TpShellBrush" Color="#FF1F1F1F" />
-          <SolidColorBrush x:Key="TpAppBackground" Color="#B3202020" />
-          <SolidColorBrush x:Key="TpHeroGradient" Color="#A82A2A2A" />
+          <SolidColorBrush x:Key="TpAppBackground" Color="#CC152B3B" />
+          <SolidColorBrush x:Key="TpHeroGradient" Color="#C21E3140" />
           <SolidColorBrush x:Key="TpSurfaceBrush" Color="#C82B2B2B" />
           <SolidColorBrush x:Key="TpSurfaceRaisedBrush" Color="#D9333333" />
           <SolidColorBrush x:Key="TpSurfaceHoverBrush" Color="#FF3A3A3A" />
@@ -50,13 +50,13 @@
       <Color x:Key="TpAccentSelectionColor">#550078D4</Color>
       <Color x:Key="TpAccentTextColor">#FFFFFFFF</Color>
 
-      <SolidColorBrush x:Key="TpAcrylicTintBrush" Color="#8A202020" />
-      <SolidColorBrush x:Key="TpAcrylicHeaderBrush" Color="#802A2A2A" />
-      <SolidColorBrush x:Key="TpAcrylicCardBrush" Color="#CC2B2B2B" />
-      <SolidColorBrush x:Key="TpAcrylicRaisedBrush" Color="#D9333333" />
-      <SolidColorBrush x:Key="TpAcrylicControlBrush" Color="#B8454545" />
-      <SolidColorBrush x:Key="TpAcrylicControlHoverBrush" Color="#CC505050" />
-      <SolidColorBrush x:Key="TpAcrylicControlPressedBrush" Color="#CC383838" />
+      <SolidColorBrush x:Key="TpAcrylicTintBrush" Color="#CC152D3F" />
+      <SolidColorBrush x:Key="TpAcrylicHeaderBrush" Color="#C71E3344" />
+      <SolidColorBrush x:Key="TpAcrylicCardBrush" Color="#D927333C" />
+      <SolidColorBrush x:Key="TpAcrylicRaisedBrush" Color="#DE2E3941" />
+      <SolidColorBrush x:Key="TpAcrylicControlBrush" Color="#CC40494F" />
+      <SolidColorBrush x:Key="TpAcrylicControlHoverBrush" Color="#D949545C" />
+      <SolidColorBrush x:Key="TpAcrylicControlPressedBrush" Color="#D9353C41" />
 
       <SolidColorBrush x:Key="TpAccentBrush" Color="{StaticResource TpAccentColor}" />
       <SolidColorBrush x:Key="TpAccent2Brush" Color="{StaticResource TpAccentColor}" />
