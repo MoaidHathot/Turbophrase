@@ -5,7 +5,6 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using AApplication = Avalonia.Application;
 using ABrushes = Avalonia.Media.Brushes;
-using AColor = Avalonia.Media.Color;
 using AHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 using AThickness = Avalonia.Thickness;
 
@@ -22,6 +21,7 @@ public sealed class ProcessingOverlayWindow : Window
     public ProcessingOverlayWindow()
     {
         Title = "Turbophrase processing";
+        RequestedThemeVariant = global::Avalonia.Styling.ThemeVariant.Dark;
         Width = 260;
         Height = 46;
         MinWidth = 140;
@@ -44,8 +44,8 @@ public sealed class ProcessingOverlayWindow : Window
         Content = new Border
         {
             Classes = { "softCard" },
-            Background = AApplication.Current?.FindResource("TpSurfaceRaisedBrush") as IBrush ?? new SolidColorBrush(AColor.FromRgb(51, 51, 51)),
-            BorderBrush = AApplication.Current?.FindResource("TpStrokeStrongBrush") as IBrush ?? Brush("TpStrokeBrush"),
+            Background = Brush("TpAcrylicRaisedBrush"),
+            BorderBrush = Brush("TpStrokeStrongBrush"),
             CornerRadius = new CornerRadius(8),
             Padding = new AThickness(18, 10),
             Child = _label

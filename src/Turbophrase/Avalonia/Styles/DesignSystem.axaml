@@ -36,8 +36,8 @@
           <SolidColorBrush x:Key="TpStrokeBrush" Color="#33FFFFFF" />
           <SolidColorBrush x:Key="TpStrokeStrongBrush" Color="#52FFFFFF" />
           <SolidColorBrush x:Key="TpTextBrush" Color="#FFFFFFFF" />
-          <SolidColorBrush x:Key="TpMutedTextBrush" Color="#FFC8C8C8" />
-          <SolidColorBrush x:Key="TpSubtleTextBrush" Color="#FF9A9A9A" />
+          <SolidColorBrush x:Key="TpMutedTextBrush" Color="#FFE2E2E2" />
+          <SolidColorBrush x:Key="TpSubtleTextBrush" Color="#FFC6C6C6" />
           <SolidColorBrush x:Key="TpSuccessBrush" Color="#FF6CCB5F" />
           <SolidColorBrush x:Key="TpDangerBrush" Color="#FFFF99A4" />
         </ResourceDictionary>
@@ -49,6 +49,14 @@
       <Color x:Key="TpAccentSoftColor">#330078D4</Color>
       <Color x:Key="TpAccentSelectionColor">#550078D4</Color>
       <Color x:Key="TpAccentTextColor">#FFFFFFFF</Color>
+
+      <SolidColorBrush x:Key="TpAcrylicTintBrush" Color="#99202020" />
+      <SolidColorBrush x:Key="TpAcrylicHeaderBrush" Color="#8C2A2A2A" />
+      <SolidColorBrush x:Key="TpAcrylicCardBrush" Color="#CC2B2B2B" />
+      <SolidColorBrush x:Key="TpAcrylicRaisedBrush" Color="#D9333333" />
+      <SolidColorBrush x:Key="TpAcrylicControlBrush" Color="#B8454545" />
+      <SolidColorBrush x:Key="TpAcrylicControlHoverBrush" Color="#CC505050" />
+      <SolidColorBrush x:Key="TpAcrylicControlPressedBrush" Color="#CC383838" />
 
       <SolidColorBrush x:Key="TpAccentBrush" Color="{StaticResource TpAccentColor}" />
       <SolidColorBrush x:Key="TpAccent2Brush" Color="{StaticResource TpAccentColor}" />
@@ -91,21 +99,21 @@
   </Style>
 
   <Style Selector="Border.card">
-    <Setter Property="Background" Value="{DynamicResource TpSurfaceBrush}" />
+    <Setter Property="Background" Value="{DynamicResource TpAcrylicCardBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource TpStrokeBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="8" />
   </Style>
 
   <Style Selector="Border.softCard">
-    <Setter Property="Background" Value="{DynamicResource TpSurfaceRaisedBrush}" />
+    <Setter Property="Background" Value="{DynamicResource TpAcrylicRaisedBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource TpStrokeBrush}" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="6" />
   </Style>
 
   <Style Selector="TextBox">
-    <Setter Property="Background" Value="{DynamicResource TpControlFillBrush}" />
+    <Setter Property="Background" Value="{DynamicResource TpAcrylicControlBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TpTextBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource TpStrokeBrush}" />
     <Setter Property="BorderThickness" Value="1" />
@@ -121,7 +129,7 @@
   </Style>
 
   <Style Selector="ComboBox">
-    <Setter Property="Background" Value="{DynamicResource TpControlFillBrush}" />
+    <Setter Property="Background" Value="{DynamicResource TpAcrylicControlBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TpTextBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource TpStrokeBrush}" />
     <Setter Property="BorderThickness" Value="1" />
@@ -135,7 +143,7 @@
   </Style>
 
   <Style Selector="Button">
-    <Setter Property="Background" Value="{DynamicResource TpControlFillBrush}" />
+    <Setter Property="Background" Value="{DynamicResource TpAcrylicControlBrush}" />
     <Setter Property="Foreground" Value="{DynamicResource TpTextBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource TpStrokeBrush}" />
     <Setter Property="BorderThickness" Value="1" />
@@ -146,12 +154,12 @@
   </Style>
 
   <Style Selector="Button:pointerover">
-    <Setter Property="Background" Value="{DynamicResource TpControlHoverBrush}" />
+    <Setter Property="Background" Value="{DynamicResource TpAcrylicControlHoverBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource TpStrokeStrongBrush}" />
   </Style>
 
   <Style Selector="Button:pressed">
-    <Setter Property="Background" Value="{DynamicResource TpControlPressedBrush}" />
+    <Setter Property="Background" Value="{DynamicResource TpAcrylicControlPressedBrush}" />
   </Style>
 
   <Style Selector="Button.primary">

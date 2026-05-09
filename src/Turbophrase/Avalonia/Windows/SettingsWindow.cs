@@ -81,6 +81,7 @@ public sealed class SettingsWindow : Window
     public SettingsWindow()
     {
         Title = "Turbophrase Settings";
+        RequestedThemeVariant = global::Avalonia.Styling.ThemeVariant.Dark;
         Width = 1080;
         Height = 720;
         MinWidth = 960;
@@ -107,12 +108,12 @@ public sealed class SettingsWindow : Window
         var root = new Grid
         {
             RowDefinitions = new RowDefinitions("Auto,*"),
-            Background = Brush("TpAppBackground")
+            Background = Brush("TpAcrylicTintBrush")
         };
 
         var hero = new Border
         {
-            Background = Brush("TpHeroGradient"),
+            Background = Brush("TpAcrylicHeaderBrush"),
             BorderBrush = Brush("TpStrokeBrush"),
             BorderThickness = new AThickness(0, 0, 0, 1),
             Padding = new AThickness(30, 22),
@@ -1578,6 +1579,7 @@ public sealed class SettingsWindow : Window
         var dialog = new Window
         {
             Title = title,
+            RequestedThemeVariant = global::Avalonia.Styling.ThemeVariant.Dark,
             Width = 460,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
@@ -1586,7 +1588,7 @@ public sealed class SettingsWindow : Window
             Background = ABrushes.Transparent,
             Content = new Border
             {
-                Background = Brush("TpAppBackground"),
+                Background = Brush("TpAcrylicTintBrush"),
                 Padding = new AThickness(20),
                 Child = new StackPanel
                 {

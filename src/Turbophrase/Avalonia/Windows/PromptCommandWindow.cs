@@ -32,6 +32,7 @@ public sealed class PromptCommandWindow : Window
         _providers = providers.OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList();
 
         Title = "Custom Prompt";
+        RequestedThemeVariant = global::Avalonia.Styling.ThemeVariant.Dark;
         Width = 700;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -161,7 +162,7 @@ public sealed class PromptCommandWindow : Window
         var root = new Border
         {
             CornerRadius = new CornerRadius(0),
-            Background = Brush("TpAppBackground"),
+            Background = Brush("TpAcrylicTintBrush"),
             BorderThickness = new AThickness(0),
             Padding = new AThickness(24)
         };

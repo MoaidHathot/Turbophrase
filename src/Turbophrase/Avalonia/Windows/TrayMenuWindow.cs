@@ -20,6 +20,7 @@ public sealed class TrayMenuWindow : Window
     {
         _sections = sections.ToList();
         Title = "Turbophrase";
+        RequestedThemeVariant = global::Avalonia.Styling.ThemeVariant.Dark;
         ShowInTaskbar = false;
         ShowActivated = true;
         Topmost = true;
@@ -97,7 +98,7 @@ public sealed class TrayMenuWindow : Window
         var border = new Border
         {
             Classes = { "softCard" },
-            Background = item.Checked ? Brush("TpAccentSoftBrush") : Brush("TpSurfaceRaisedBrush"),
+            Background = item.Checked ? Brush("TpAccentSoftBrush") : Brush("TpAcrylicRaisedBrush"),
             BorderBrush = item.Checked ? Brush("TpAccentBrush") : Brush("TpStrokeBrush"),
             Opacity = item.Enabled ? 1 : 0.48,
             Padding = new AThickness(10, 8),

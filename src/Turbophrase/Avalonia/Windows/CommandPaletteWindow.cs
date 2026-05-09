@@ -41,6 +41,7 @@ public sealed class CommandPaletteWindow : Window
             .ToList();
 
         Title = "Choose Operation";
+        RequestedThemeVariant = global::Avalonia.Styling.ThemeVariant.Dark;
         Width = 680;
         SizeToContent = SizeToContent.Height;
         MinHeight = 360;
@@ -141,7 +142,7 @@ public sealed class CommandPaletteWindow : Window
         var root = new Border
         {
             CornerRadius = new ACornerRadius(0),
-            Background = Brush("TpAppBackground"),
+            Background = Brush("TpAcrylicTintBrush"),
             BorderThickness = new AThickness(0),
             Padding = new AThickness(18)
         };
@@ -242,9 +243,9 @@ public sealed class CommandPaletteWindow : Window
         {
             Height = RowHeight,
             CornerRadius = new ACornerRadius(6),
-            BorderThickness = new AThickness(1),
-            BorderBrush = selected ? Brush("TpAccentBrush") : Brush("TpStrokeBrush"),
-            Background = selected ? Brush("TpAccentSoftBrush") : Brush("TpSurfaceRaisedBrush"),
+            BorderThickness = selected ? new AThickness(1) : new AThickness(0),
+            BorderBrush = selected ? Brush("TpAccentBrush") : ABrushes.Transparent,
+            Background = selected ? Brush("TpAccentSoftBrush") : ABrushes.Transparent,
             Padding = new AThickness(8, 0),
             Cursor = new ACursor(StandardCursorType.Hand)
         };
@@ -371,7 +372,7 @@ public sealed class CommandPaletteWindow : Window
 
     private IBrush NeutralKeyBrush() => ActualThemeVariant == global::Avalonia.Styling.ThemeVariant.Light
         ? new SolidColorBrush(AColor.FromArgb(0xE6, 0xFF, 0xFF, 0xFF))
-        : new SolidColorBrush(AColor.FromArgb(0xE6, 0x2D, 0x2D, 0x2D));
+        : new SolidColorBrush(AColor.FromArgb(0xF2, 0x2D, 0x2D, 0x2D));
 
     private IBrush NeutralKeyTextBrush() => ActualThemeVariant == global::Avalonia.Styling.ThemeVariant.Light
         ? new SolidColorBrush(AColor.FromRgb(0x1A, 0x1A, 0x1A))

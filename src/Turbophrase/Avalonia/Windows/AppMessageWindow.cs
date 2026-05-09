@@ -16,6 +16,7 @@ public sealed class AppMessageWindow : Window
     public AppMessageWindow(string title, string message, bool isError)
     {
         Title = title;
+        RequestedThemeVariant = global::Avalonia.Styling.ThemeVariant.Dark;
         var screen = DisplayPlacement.GetScreenNearCursor(Screens) ?? Screens.Primary;
         var scale = screen?.Scaling is > 0 ? screen.Scaling : 1;
         var workingArea = screen?.WorkingArea;
@@ -36,7 +37,7 @@ public sealed class AppMessageWindow : Window
 
         Content = new Border
         {
-            Background = AApplication.Current?.FindResource("TpAppBackground") as IBrush ?? Brush("TpVoidBrush"),
+            Background = Brush("TpAcrylicTintBrush"),
             Padding = new AThickness(22),
             Child = new Grid
             {

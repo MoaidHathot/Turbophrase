@@ -66,6 +66,7 @@ public sealed class FirstRunWindow : Window
     public FirstRunWindow()
     {
         Title = "Welcome to Turbophrase";
+        RequestedThemeVariant = global::Avalonia.Styling.ThemeVariant.Dark;
         SetInitialWindowBounds();
         MinWidth = 520;
         MinHeight = 480;
@@ -155,12 +156,12 @@ public sealed class FirstRunWindow : Window
         var root = new Grid
         {
             RowDefinitions = new RowDefinitions("Auto,*,Auto"),
-            Background = AApplication.Current?.FindResource("TpAppBackground") as IBrush ?? Brush("TpVoidBrush")
+            Background = Brush("TpAcrylicTintBrush")
         };
 
         var hero = new Border
         {
-            Background = AApplication.Current?.FindResource("TpHeroGradient") as IBrush ?? Brush("TpSurfaceBrush"),
+            Background = Brush("TpAcrylicHeaderBrush"),
             BorderBrush = Brush("TpStrokeBrush"),
             BorderThickness = new AThickness(0, 0, 0, 1),
             Padding = new AThickness(30, 22),
@@ -301,7 +302,7 @@ public sealed class FirstRunWindow : Window
         return new Border
         {
             Classes = { "softCard" },
-            Background = active ? Brush("TpAccentSoftBrush") : Brush("TpSurfaceRaisedBrush"),
+            Background = active ? Brush("TpAccentSoftBrush") : Brush("TpAcrylicRaisedBrush"),
             BorderBrush = active ? Brush("TpAccentBrush") : Brush("TpStrokeBrush"),
             Padding = new AThickness(12),
             Child = new Grid
@@ -315,7 +316,7 @@ public sealed class FirstRunWindow : Window
                         Width = 28,
                         Height = 28,
                         CornerRadius = new CornerRadius(4),
-                        Background = active ? Brush("TpAccentBrush") : Brush("TpSurfaceBrush"),
+                        Background = active ? Brush("TpAccentBrush") : Brush("TpAcrylicCardBrush"),
                         Child = new TextBlock
                         {
                             Text = number,
@@ -407,7 +408,7 @@ public sealed class FirstRunWindow : Window
         var card = new Border
         {
             Classes = { "softCard" },
-            Background = selected ? Brush("TpAccentSoftBrush") : Brush("TpSurfaceRaisedBrush"),
+            Background = selected ? Brush("TpAccentSoftBrush") : Brush("TpAcrylicRaisedBrush"),
             BorderBrush = selected ? Brush("TpAccentBrush") : Brush("TpStrokeBrush"),
             Padding = new AThickness(16, 13),
             Child = new Grid
@@ -823,7 +824,7 @@ public sealed class FirstRunWindow : Window
     private static AControl Pill(string text) => new Border
     {
         CornerRadius = new CornerRadius(4),
-        Background = Brush("TpControlFillBrush"),
+        Background = Brush("TpAcrylicControlBrush"),
         BorderBrush = Brush("TpStrokeBrush"),
         BorderThickness = new AThickness(1),
         Padding = new AThickness(10, 5),
