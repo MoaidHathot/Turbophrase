@@ -4,6 +4,7 @@ using Turbophrase.Core.Configuration;
 using Turbophrase.Avalonia;
 using Turbophrase.Avalonia.Windows;
 using Turbophrase.Services;
+using AWindow = Avalonia.Controls.Window;
 
 namespace Turbophrase;
 
@@ -27,6 +28,16 @@ public class TrayApplicationContext : ApplicationContext
     private readonly int _uiThreadId;
     private SettingsWindow? _settingsWindow;
     private bool _setupRequired;
+
+    // Tracks every transient "command surface" window that is currently shown
+    // (custom prompt, picker, tray menu, message dialogs). The settings window,
+    // first-run wizard, and processing overlay are NOT tracked here — they are
+    // either persistent (settings) or part of in-flight transforms (overlay).
+    // Used to enforce the "single Turbophrase command surface" invariant: any
+    // hotkey or tray-menu action that opens a new surface first dismisses any
+    // already-open surfaces.
+    private readonly object _commandWindowsLock = new();
+    private readonly HashSet<AWindow> _commandWindows = new();
 
     public TrayApplicationContext()
     {
@@ -312,11 +323,13 @@ public class TrayApplicationContext : ApplicationContext
     {
         try
         {
-            if (_setupRequired)
-            {
-                ShowSetupRequiredNotification();
-                return;
-            }
+            // Enforce the "single Turbophrase command surface" invariant: any
+            // hotkey press tears down whatever picker / custom prompt / tray
+            // menu was already showing before opening the new surface. The
+            // setup-required check happens inside ExecuteBindingAsync so that
+            // the quit hotkey can still shut the app down before setup is
+            // complete.
+            await CloseCommandSurfacesAsync();
 
             RuntimeLog.Write($"hotkey-handler-start keys='{e.Binding.Keys}' action='{e.Binding.Action ?? "preset"}' preset='{e.Binding.Preset}'");
             await ExecuteBindingAsync(e.Binding);
@@ -343,7 +356,7 @@ public class TrayApplicationContext : ApplicationContext
     {
         if (e.Button == MouseButtons.Left)
         {
-            OpenTrayMenuWindow();
+            _ = OpenTrayMenuWindowAsync();
         }
     }
 
@@ -389,11 +402,16 @@ public class TrayApplicationContext : ApplicationContext
         }
     }
 
-    private void OpenTrayMenuWindow()
+    private async Task OpenTrayMenuWindowAsync()
     {
+        // Tear down any other transient surface (existing tray menu, picker,
+        // custom prompt) before showing the new tray menu so only one
+        // Turbophrase command surface is ever visible at once.
+        await CloseCommandSurfacesAsync();
+
         AvaloniaUiHost.Invoke(() =>
         {
-            var menu = new TrayMenuWindow(BuildTrayMenuSections());
+            var menu = RegisterCommandWindow(new TrayMenuWindow(BuildTrayMenuSections()));
             menu.Show();
             menu.Activate();
         });
@@ -497,6 +515,94 @@ public class TrayApplicationContext : ApplicationContext
         return completion.Task;
     }
 
+    /// <summary>
+    /// Tracks <paramref name="window"/> as a transient command surface so it
+    /// participates in the "single Turbophrase command surface" invariant.
+    /// The window is automatically removed from the registry when it closes.
+    /// Must be called on the Avalonia UI thread (i.e. inside an
+    /// <see cref="AvaloniaUiHost.Invoke(Action)"/> or factory callback).
+    /// </summary>
+    private T RegisterCommandWindow<T>(T window) where T : AWindow
+    {
+        lock (_commandWindowsLock)
+        {
+            _commandWindows.Add(window);
+        }
+        window.Closed += OnCommandWindowClosed;
+        return window;
+    }
+
+    private void OnCommandWindowClosed(object? sender, EventArgs e)
+    {
+        if (sender is AWindow window)
+        {
+            window.Closed -= OnCommandWindowClosed;
+            lock (_commandWindowsLock)
+            {
+                _commandWindows.Remove(window);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Closes every currently-open transient command surface (custom prompt,
+    /// picker, tray menu, message dialog) and waits for each window's Closed
+    /// event before completing. Settings, first-run, and processing-overlay
+    /// windows are intentionally left alone. Safe to call from any thread; the
+    /// actual <c>Close()</c> calls are marshaled to the Avalonia UI thread.
+    /// </summary>
+    private Task CloseCommandSurfacesAsync()
+    {
+        AWindow[] toClose;
+        lock (_commandWindowsLock)
+        {
+            toClose = _commandWindows.ToArray();
+        }
+
+        if (toClose.Length == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        var closeTasks = new List<Task>(toClose.Length);
+        foreach (var window in toClose)
+        {
+            var captured = window;
+            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            EventHandler? handler = null;
+            handler = (_, _) =>
+            {
+                captured.Closed -= handler;
+                tcs.TrySetResult();
+            };
+
+            AvaloniaUiHost.Invoke(() =>
+            {
+                try
+                {
+                    if (!captured.IsVisible)
+                    {
+                        tcs.TrySetResult();
+                        return;
+                    }
+
+                    captured.Closed += handler;
+                    captured.Close();
+                }
+                catch (Exception ex)
+                {
+                    RuntimeLog.Write($"close-command-surface-failed type='{captured.GetType().Name}' error='{ex.Message}'");
+                    captured.Closed -= handler;
+                    tcs.TrySetResult();
+                }
+            });
+
+            closeTasks.Add(tcs.Task);
+        }
+
+        return Task.WhenAll(closeTasks);
+    }
+
     private void OpenConfigFolder()
     {
         if (Directory.Exists(ConfigurationService.ConfigDirectory))
@@ -589,6 +695,11 @@ public class TrayApplicationContext : ApplicationContext
 
     private async Task ExecutePresetPickerAsync(HotkeyBinding binding)
     {
+        // Picker is a command surface; ensure no other surface is visible
+        // when invoked directly (tray menu item click). Hotkey path already
+        // closed surfaces in OnHotkeyPressed; second call is a safe no-op.
+        await CloseCommandSurfacesAsync();
+
         var sourceWindowHandle = _orchestrator.GetActiveWindowHandle();
         var firstCopyAttemptSent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var captureTask = CaptureForCommandSurfaceAsync(sourceWindowHandle, () => firstCopyAttemptSent.TrySetResult());
@@ -634,10 +745,10 @@ public class TrayApplicationContext : ApplicationContext
     {
         var dialogTask = AvaloniaUiHost.InvokeAsync(() =>
         {
-            var created = new CommandPaletteWindow(GetPickerOperations())
+            var created = RegisterCommandWindow(new CommandPaletteWindow(GetPickerOperations())
             {
                 ShowActivated = false
-            };
+            });
             created.SetCapturePending();
             return created;
         });
@@ -697,6 +808,11 @@ public class TrayApplicationContext : ApplicationContext
 
     private async Task ExecuteCustomPromptAsync(HotkeyBinding? binding = null)
     {
+        // Prompt is a command surface; ensure no other surface is visible
+        // when invoked directly (tray menu item click). Hotkey path already
+        // closed surfaces in OnHotkeyPressed; second call is a safe no-op.
+        await CloseCommandSurfacesAsync();
+
         var sourceWindowHandle = _orchestrator.GetActiveWindowHandle();
         var firstCopyAttemptSent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var captureTask = CaptureForCommandSurfaceAsync(sourceWindowHandle, () => firstCopyAttemptSent.TrySetResult());
@@ -750,10 +866,10 @@ public class TrayApplicationContext : ApplicationContext
     {
         var dialogTask = AvaloniaUiHost.InvokeAsync(() =>
         {
-            var created = new PromptCommandWindow(_orchestrator.AvailableProviders, _config.DefaultProvider)
+            var created = RegisterCommandWindow(new PromptCommandWindow(_orchestrator.AvailableProviders, _config.DefaultProvider)
             {
                 ShowActivated = false
-            };
+            });
             created.SetCapturePending();
             return created;
         });
@@ -783,7 +899,7 @@ public class TrayApplicationContext : ApplicationContext
         PromptCommandWindow? dialog = null;
         AvaloniaUiHost.Invoke(() =>
         {
-            dialog = new PromptCommandWindow(_orchestrator.AvailableProviders, _config.DefaultProvider);
+            dialog = RegisterCommandWindow(new PromptCommandWindow(_orchestrator.AvailableProviders, _config.DefaultProvider));
             dialog.SetCaptureReady();
             dialog.ActivateForInput();
         });
@@ -1083,6 +1199,34 @@ public class TrayApplicationContext : ApplicationContext
     {
         if (disposing)
         {
+            // Close any tracked transient command surfaces still on screen so
+            // shutdown does not leave orphan windows behind.
+            AWindow[] remainingSurfaces;
+            lock (_commandWindowsLock)
+            {
+                remainingSurfaces = _commandWindows.ToArray();
+                _commandWindows.Clear();
+            }
+
+            if (remainingSurfaces.Length > 0)
+            {
+                AvaloniaUiHost.Invoke(() =>
+                {
+                    foreach (var window in remainingSurfaces)
+                    {
+                        try
+                        {
+                            window.Closed -= OnCommandWindowClosed;
+                            window.Close();
+                        }
+                        catch (Exception ex)
+                        {
+                            RuntimeLog.Write($"dispose-close-command-surface-failed type='{window.GetType().Name}' error='{ex.Message}'");
+                        }
+                    }
+                });
+            }
+
             if (_settingsWindow != null)
             {
                 AvaloniaUiHost.Invoke(() =>
