@@ -27,7 +27,7 @@ public sealed class TrayMenuWindow : Window
         WindowDecorations = WindowDecorations.None;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.Manual;
-        TransparencyLevelHint = [WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.Mica, WindowTransparencyLevel.None];
+        TransparencyLevelHint = [WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.Blur, WindowTransparencyLevel.Transparent, WindowTransparencyLevel.Mica, WindowTransparencyLevel.None];
         Background = ABrushes.Transparent;
 
         var screen = DisplayPlacement.GetScreenNearCursor(Screens) ?? Screens.Primary;

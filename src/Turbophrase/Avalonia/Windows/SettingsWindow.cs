@@ -86,7 +86,7 @@ public sealed class SettingsWindow : Window
         MinWidth = 960;
         MinHeight = 620;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        TransparencyLevelHint = [WindowTransparencyLevel.Mica, WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.None];
+        TransparencyLevelHint = [WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.Blur, WindowTransparencyLevel.Transparent, WindowTransparencyLevel.Mica, WindowTransparencyLevel.None];
         Background = ABrushes.Transparent;
 
         _closeButton = new AButton { Content = "Close", MinWidth = 96, Command = new RelayCommand(RequestClose) };
@@ -1582,7 +1582,7 @@ public sealed class SettingsWindow : Window
             SizeToContent = SizeToContent.Height,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            TransparencyLevelHint = [WindowTransparencyLevel.Mica, WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.None],
+            TransparencyLevelHint = [WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.Blur, WindowTransparencyLevel.Transparent, WindowTransparencyLevel.Mica, WindowTransparencyLevel.None],
             Background = ABrushes.Transparent,
             Content = new Border
             {

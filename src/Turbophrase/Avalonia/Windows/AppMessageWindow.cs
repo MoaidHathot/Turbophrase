@@ -28,7 +28,7 @@ public sealed class AppMessageWindow : Window
         CanResize = true;
         ShowInTaskbar = true;
         WindowStartupLocation = WindowStartupLocation.Manual;
-        TransparencyLevelHint = [WindowTransparencyLevel.Mica, WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.None];
+        TransparencyLevelHint = [WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.Blur, WindowTransparencyLevel.Transparent, WindowTransparencyLevel.Mica, WindowTransparencyLevel.None];
         Background = ABrushes.Transparent;
 
         var close = new AButton { Classes = { "primary" }, Content = "Close", MinWidth = 96 };

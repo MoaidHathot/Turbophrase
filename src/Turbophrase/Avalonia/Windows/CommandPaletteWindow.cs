@@ -51,7 +51,7 @@ public sealed class CommandPaletteWindow : Window
         ShowInTaskbar = false;
         Topmost = true;
         CanResize = false;
-        TransparencyLevelHint = [WindowTransparencyLevel.Mica, WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.None];
+        TransparencyLevelHint = [WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.Blur, WindowTransparencyLevel.Transparent, WindowTransparencyLevel.Mica, WindowTransparencyLevel.None];
         Background = ABrushes.Transparent;
 
         _filterBox = new ATextBox

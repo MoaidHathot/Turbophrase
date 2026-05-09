@@ -32,7 +32,7 @@ public sealed class ProcessingOverlayWindow : Window
         Topmost = true;
         WindowDecorations = WindowDecorations.None;
         WindowStartupLocation = WindowStartupLocation.Manual;
-        TransparencyLevelHint = [WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.None];
+        TransparencyLevelHint = [WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.Blur, WindowTransparencyLevel.Transparent, WindowTransparencyLevel.None];
         Background = ABrushes.Transparent;
 
         _label.Text = BaseText;

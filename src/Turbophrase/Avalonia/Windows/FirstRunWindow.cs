@@ -73,7 +73,7 @@ public sealed class FirstRunWindow : Window
         ShowInTaskbar = true;
         ShowActivated = true;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        TransparencyLevelHint = [WindowTransparencyLevel.Mica, WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.None];
+        TransparencyLevelHint = [WindowTransparencyLevel.AcrylicBlur, WindowTransparencyLevel.Blur, WindowTransparencyLevel.Transparent, WindowTransparencyLevel.Mica, WindowTransparencyLevel.None];
         Background = ABrushes.Transparent;
 
         _backButton.Click += (_, _) => GoToStep(_step - 1);
