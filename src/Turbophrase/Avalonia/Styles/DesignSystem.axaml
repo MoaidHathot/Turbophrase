@@ -50,8 +50,8 @@
       <Color x:Key="TpAccentSelectionColor">#550078D4</Color>
       <Color x:Key="TpAccentTextColor">#FFFFFFFF</Color>
 
-      <SolidColorBrush x:Key="TpAcrylicTintBrush" Color="#99202020" />
-      <SolidColorBrush x:Key="TpAcrylicHeaderBrush" Color="#8C2A2A2A" />
+      <SolidColorBrush x:Key="TpAcrylicTintBrush" Color="#8A202020" />
+      <SolidColorBrush x:Key="TpAcrylicHeaderBrush" Color="#802A2A2A" />
       <SolidColorBrush x:Key="TpAcrylicCardBrush" Color="#CC2B2B2B" />
       <SolidColorBrush x:Key="TpAcrylicRaisedBrush" Color="#D9333333" />
       <SolidColorBrush x:Key="TpAcrylicControlBrush" Color="#B8454545" />

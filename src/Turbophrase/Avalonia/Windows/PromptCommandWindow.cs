@@ -66,17 +66,19 @@ public sealed class PromptCommandWindow : Window
 
         _statusText = new TextBlock
         {
-            Classes = { "muted" },
             Text = "Capturing selected text...",
             FontSize = 12,
+            Foreground = ABrushes.White,
+            Opacity = 0.86,
             VerticalAlignment = VerticalAlignment.Center
         };
 
         _shortcutHint = new TextBlock
         {
-            Classes = { "subtle" },
             Text = "Shortcuts: Ctrl+Enter runs, Esc cancels, Ctrl+Up/Down changes provider, Alt+1-9 jumps provider.",
-            FontSize = 12
+            FontSize = 12,
+            Foreground = ABrushes.White,
+            Opacity = 0.78
         };
 
         _runButton = new AButton
@@ -109,7 +111,8 @@ public sealed class PromptCommandWindow : Window
     public void SetCapturePending()
     {
         _captureReady = false;
-        _statusText.Foreground = Brush("TpMutedTextBrush");
+        _statusText.Foreground = ABrushes.White;
+        _statusText.Opacity = 0.86;
         _statusText.Text = "Capturing selected text...";
         UpdateRunState();
     }
@@ -117,8 +120,9 @@ public sealed class PromptCommandWindow : Window
     public void SetCaptureReady()
     {
         _captureReady = true;
-        _statusText.Foreground = Brush("TpMutedTextBrush");
-        _statusText.Text = "Ctrl+Enter runs. Ctrl+Up/Down changes provider. Alt+1-9 jumps provider. Esc cancels.";
+        _statusText.Foreground = ABrushes.White;
+        _statusText.Opacity = 0.86;
+        _statusText.Text = "Text captured. Ready to run.";
         UpdateRunState();
     }
 
@@ -126,6 +130,7 @@ public sealed class PromptCommandWindow : Window
     {
         _captureReady = false;
         _statusText.Foreground = Brush("TpDangerBrush");
+        _statusText.Opacity = 1;
         _statusText.Text = message;
         UpdateRunState();
     }
@@ -176,7 +181,13 @@ public sealed class PromptCommandWindow : Window
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         var titleStack = new StackPanel { Spacing = 2 };
         titleStack.Children.Add(new TextBlock { Text = "Custom prompt", FontSize = 24, FontWeight = FontWeight.SemiBold, LineHeight = 29 });
-        titleStack.Children.Add(new TextBlock { Classes = { "muted" }, Text = "Describe the transformation. Turbophrase handles the selected text.", FontSize = 13 });
+        titleStack.Children.Add(new TextBlock
+        {
+            Text = "Describe the transformation. Turbophrase handles the selected text.",
+            FontSize = 13,
+            Foreground = ABrushes.White,
+            Opacity = 0.86
+        });
 
         var closeButton = new AButton { Classes = { "ghost" }, Content = "Esc", Padding = new AThickness(10, 6) };
         closeButton.Click += (_, _) => Cancel();
@@ -197,8 +208,9 @@ public sealed class PromptCommandWindow : Window
         };
         providerRow.Children.Add(new TextBlock
         {
-            Classes = { "muted" },
             Text = "Provider",
+            Foreground = ABrushes.White,
+            Opacity = 0.86,
             VerticalAlignment = VerticalAlignment.Center
         });
         Grid.SetColumn(_providerBox, 1);
@@ -318,6 +330,7 @@ public sealed class PromptCommandWindow : Window
         if (!_captureReady || string.IsNullOrWhiteSpace(PromptText))
         {
             _statusText.Foreground = Brush("TpDangerBrush");
+            _statusText.Opacity = 1;
             _statusText.Text = !_captureReady
                 ? "Text capture must succeed before the prompt can run."
                 : "Prompt cannot be empty.";
