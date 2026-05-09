@@ -542,6 +542,15 @@ public class TrayApplicationContext : ApplicationContext
 
     private async Task ExecuteBindingAsync(HotkeyBinding binding)
     {
+        if (binding.IsQuitAction)
+        {
+            // Quit is intentionally available before setup completes so the
+            // user can always shut Turbophrase down with their hotkey.
+            RuntimeLog.Write($"hotkey-quit keys='{binding.Keys}'");
+            await RunOnTrayThread(ExitThread);
+            return;
+        }
+
         if (_setupRequired)
         {
             ShowSetupRequiredNotification();
@@ -656,6 +665,14 @@ public class TrayApplicationContext : ApplicationContext
     private async Task ExecutePickedOperationAsync(PickerOperation operation, SelectionCaptureResult captureResult)
     {
         var binding = operation.Binding;
+        if (binding.IsQuitAction)
+        {
+            await _orchestrator.RestoreClipboardAsync(captureResult);
+            RuntimeLog.Write($"picker-quit keys='{binding.Keys}'");
+            await RunOnTrayThread(ExitThread);
+            return;
+        }
+
         if (binding.IsCustomPromptAction)
         {
             await ExecuteCustomPromptAsync(binding, captureResult);
@@ -960,6 +977,11 @@ public class TrayApplicationContext : ApplicationContext
         if (binding.IsPresetPickerAction)
         {
             return !string.IsNullOrWhiteSpace(binding.Name) ? binding.Name : "Choose Operation";
+        }
+
+        if (binding.IsQuitAction)
+        {
+            return !string.IsNullOrWhiteSpace(binding.Name) ? binding.Name : "Quit Turbophrase";
         }
 
         return GetPresetDisplayName(binding.Preset);

@@ -383,19 +383,26 @@ public class ConfigEditorTests : IDisposable
         {
             new HotkeyBinding { Keys = "Ctrl+Alt+T", Action = "custom-prompt", Name = "Translate" },
             new HotkeyBinding { Keys = "Ctrl+F7", Action = "preset-picker", Name = "Choose" },
+            new HotkeyBinding { Keys = "Ctrl+Alt+Q", Action = "quit", Name = "Quit" },
         });
         editor.Save();
 
         var hotkeys = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(_tempPath))!["hotkeys"]!.AsArray();
-        Assert.Equal(2, hotkeys.Count);
+        Assert.Equal(3, hotkeys.Count);
         var first = hotkeys[0]!.AsObject();
         Assert.Equal("Ctrl+Alt+T", first["keys"]!.GetValue<string>());
         Assert.Equal("custom-prompt", first["action"]!.GetValue<string>());
         Assert.False(first.ContainsKey("isCustomPromptAction"));
         Assert.False(first.ContainsKey("isPresetPickerAction"));
+        Assert.False(first.ContainsKey("isQuitAction"));
         Assert.False(first.ContainsKey("isPresetAction"));
         // Empty preset should be stripped:
         Assert.False(first.ContainsKey("preset"));
+
+        var quit = hotkeys[2]!.AsObject();
+        Assert.Equal("quit", quit["action"]!.GetValue<string>());
+        Assert.False(quit.ContainsKey("isQuitAction"));
+        Assert.False(quit.ContainsKey("preset"));
     }
 
     [Fact]
@@ -413,6 +420,31 @@ public class ConfigEditorTests : IDisposable
         var first = actions[0]!.AsObject();
         Assert.Equal("Shorten", first["name"]!.GetValue<string>());
         Assert.Equal(99, first["pickerOrder"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void SetPickerActions_PicksUpQuitAction_WithoutHotkey()
+    {
+        var editor = ConfigEditor.LoadOrCreate(_tempPath);
+        editor.SetPickerActions(new[]
+        {
+            new HotkeyBinding { Action = "quit", Name = "Quit Turbophrase", IncludeInPicker = true, PickerOrder = 100 },
+        });
+        editor.Save();
+
+        var actions = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(_tempPath))!["pickerActions"]!.AsArray();
+        Assert.Single(actions);
+        var first = actions[0]!.AsObject();
+        Assert.Equal("quit", first["action"]!.GetValue<string>());
+        Assert.Equal("Quit Turbophrase", first["name"]!.GetValue<string>());
+        Assert.True(first["includeInPicker"]!.GetValue<bool>());
+        Assert.Equal(100, first["pickerOrder"]!.GetValue<int>());
+        // No hotkey is required for picker-only actions.
+        Assert.False(first.ContainsKey("keys") && !string.IsNullOrEmpty(first["keys"]?.GetValue<string>()));
+        // Computed helper booleans should be stripped.
+        Assert.False(first.ContainsKey("isQuitAction"));
+        Assert.False(first.ContainsKey("isPresetAction"));
+        Assert.False(first.ContainsKey("preset"));
     }
 
     [Fact]

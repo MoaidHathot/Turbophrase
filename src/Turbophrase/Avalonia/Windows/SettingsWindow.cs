@@ -813,7 +813,7 @@ public sealed class SettingsWindow : Window
         UpdateHotkeyStatus(hotkey.Keys, keysStatus);
         var record = new AButton { Content = "Record shortcut" };
         record.Click += (_, _) => StartHotkeyRecording(keys, keysStatus, text => { hotkey.Keys = text; MarkDirty(); });
-        var action = new AComboBox { ItemsSource = new[] { "preset", "custom-prompt", "preset-picker" }, SelectedItem = string.IsNullOrWhiteSpace(hotkey.Action) ? "preset" : hotkey.Action, MinWidth = 220 };
+        var action = new AComboBox { ItemsSource = new[] { "preset", "custom-prompt", "preset-picker", "quit" }, SelectedItem = string.IsNullOrWhiteSpace(hotkey.Action) ? "preset" : hotkey.Action, MinWidth = 220 };
         action.SelectionChanged += (_, _) => { hotkey.Action = action.SelectedItem as string; RebuildPickerRows(); MarkDirty(); };
         var preset = new AComboBox { ItemsSource = _presets.Select(p => p.Key).ToList(), SelectedItem = hotkey.Preset, MinWidth = 220 };
         preset.SelectionChanged += (_, _) => { hotkey.Preset = preset.SelectedItem as string ?? string.Empty; MarkDirty(); };
@@ -890,6 +890,32 @@ public sealed class SettingsWindow : Window
             MarkDirty();
         };
 
+        var addQuit = new AButton { Content = "Add quit action" };
+        addQuit.Click += (_, _) =>
+        {
+            // Reuse an existing quit picker action if one already exists so the
+            // user does not end up with multiple "Quit" rows in the picker.
+            var existing = _pickerActions.FirstOrDefault(a => a.IsQuitAction);
+            if (existing != null)
+            {
+                existing.IncludeInPicker = true;
+                RebuildPickerRows();
+                list.ItemsSource = null;
+                list.ItemsSource = _pickerRows;
+                list.SelectedItem = _pickerRows.FirstOrDefault(row => ReferenceEquals(row.Binding, existing));
+                MarkDirty();
+                return;
+            }
+
+            var action = new HotkeyBinding { Action = "quit", Name = "Quit Turbophrase", IncludeInPicker = true, PickerOrder = _pickerRows.Count + 1 };
+            _pickerActions.Add(action);
+            RebuildPickerRows();
+            list.ItemsSource = null;
+            list.ItemsSource = _pickerRows;
+            list.SelectedItem = _pickerRows.LastOrDefault();
+            MarkDirty();
+        };
+
         var removeAction = new AButton { Content = "Remove picker-only action" };
         removeAction.Click += async (_, _) =>
         {
@@ -915,7 +941,7 @@ public sealed class SettingsWindow : Window
                 Children = { list, WithColumn(detailHost, 1) }
             },
             include,
-            new StackPanel { Orientation = AOrientation.Horizontal, Spacing = 10, Children = { up, down, addAction, removeAction } });
+            new StackPanel { Orientation = AOrientation.Horizontal, Spacing = 10, Children = { up, down, addAction, addQuit, removeAction } });
     }
 
     private AControl BuildPickerEntryDetail(PickerEntry row, AListBox list)
@@ -932,6 +958,14 @@ public sealed class SettingsWindow : Window
             RebuildPickerRowsAndRestoreSelection(list, binding);
             MarkDirty();
         });
+
+        if (binding.IsQuitAction)
+        {
+            return CardStack(
+                SectionHeader(DescribeHotkey(binding), row.Source == "Picker action" ? "Picker-only quit action. No hotkey is required." : "Quit hotkey shown in picker."),
+                Field("Display name", name));
+        }
+
         var provider = new AComboBox { ItemsSource = new[] { "" }.Concat(ProviderNames()).ToList(), SelectedItem = binding.Provider ?? string.Empty, MinWidth = 220 };
         provider.SelectionChanged += (_, _) => { binding.Provider = string.IsNullOrWhiteSpace(provider.SelectedItem as string) ? null : provider.SelectedItem as string; MarkDirty(); };
         var template = Text(binding.SystemPromptTemplate ?? string.Empty, text => { binding.SystemPromptTemplate = string.IsNullOrWhiteSpace(text) ? null : text; MarkDirty(); }, multi: true, minHeight: 150);
@@ -1338,6 +1372,7 @@ public sealed class SettingsWindow : Window
     {
         if (h.IsCustomPromptAction) return string.IsNullOrWhiteSpace(h.Name) ? "Custom prompt" : h.Name!;
         if (h.IsPresetPickerAction) return string.IsNullOrWhiteSpace(h.Name) ? "Choose operation" : h.Name!;
+        if (h.IsQuitAction) return string.IsNullOrWhiteSpace(h.Name) ? "Quit Turbophrase" : h.Name!;
         return h.Preset;
     }
 

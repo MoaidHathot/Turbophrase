@@ -60,6 +60,12 @@ public class HotkeyBinding
     public bool IsPresetPickerAction => string.Equals(Action, "preset-picker", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Gets whether this binding shuts down Turbophrase when pressed.
+    /// </summary>
+    public bool IsQuitAction => string.Equals(Action, "quit", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(Action, "exit", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Gets whether this binding executes a preset action.
     /// </summary>
     public bool IsPresetAction => string.IsNullOrWhiteSpace(Action)

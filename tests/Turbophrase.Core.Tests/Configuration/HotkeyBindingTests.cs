@@ -20,6 +20,7 @@ public class HotkeyBindingTests
         Assert.True(binding.IsPresetAction);
         Assert.False(binding.IsCustomPromptAction);
         Assert.False(binding.IsPresetPickerAction);
+        Assert.False(binding.IsQuitAction);
     }
 
     [Fact]
@@ -77,7 +78,41 @@ public class HotkeyBindingTests
         Assert.True(binding.IsPresetPickerAction);
         Assert.False(binding.IsCustomPromptAction);
         Assert.False(binding.IsPresetAction);
+        Assert.False(binding.IsQuitAction);
         Assert.Equal("Choose Operation", binding.Name);
+    }
+
+    [Theory]
+    [InlineData("quit")]
+    [InlineData("Quit")]
+    [InlineData("QUIT")]
+    [InlineData("exit")]
+    [InlineData("Exit")]
+    public void HotkeyBinding_QuitAction_IsRecognized(string action)
+    {
+        var binding = new HotkeyBinding
+        {
+            Keys = "Ctrl+Alt+Q",
+            Action = action,
+            Name = "Quit Turbophrase"
+        };
+
+        Assert.True(binding.IsQuitAction);
+        Assert.False(binding.IsPresetAction);
+        Assert.False(binding.IsCustomPromptAction);
+        Assert.False(binding.IsPresetPickerAction);
+        Assert.Equal("Quit Turbophrase", binding.Name);
+    }
+
+    [Fact]
+    public void HotkeyBinding_QuitAction_DoesNotMatchUnrelatedActions()
+    {
+        Assert.False(new HotkeyBinding { Action = "preset" }.IsQuitAction);
+        Assert.False(new HotkeyBinding { Action = "custom-prompt" }.IsQuitAction);
+        Assert.False(new HotkeyBinding { Action = "preset-picker" }.IsQuitAction);
+        Assert.False(new HotkeyBinding { Action = null }.IsQuitAction);
+        Assert.False(new HotkeyBinding { Action = string.Empty }.IsQuitAction);
+        Assert.False(new HotkeyBinding { Action = "quitter" }.IsQuitAction);
     }
 
     [Fact]

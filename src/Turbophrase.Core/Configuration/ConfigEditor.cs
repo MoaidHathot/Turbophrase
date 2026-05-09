@@ -364,6 +364,7 @@ public class ConfigEditor
             // helpers so the file stays clean.
             node.Remove("isCustomPromptAction");
             node.Remove("isPresetPickerAction");
+            node.Remove("isQuitAction");
             node.Remove("isPresetAction");
 
             // Preset is "" for non-preset actions; drop the empty string so
