@@ -60,6 +60,7 @@ public class TrayApplicationContext : ApplicationContext
             RuntimeLog.Configure(_config.Logging);
             RuntimeLog.Write("app-start");
             RuntimeLog.Write($"config-loaded path='{ConfigurationService.ConfigFilePath}' hotkeys={_config.Hotkeys.Count} defaultProvider='{_config.DefaultProvider}' logging={_config.Logging.Enabled}");
+            RuntimeLog.WriteBootstrap($"config-loaded path='{ConfigurationService.ConfigFilePath}' defaultProvider='{_config.DefaultProvider}'");
 
             // First-run onboarding: if no provider has usable credentials,
             // show the wizard before bringing up the rest of the tray. The
@@ -123,6 +124,8 @@ public class TrayApplicationContext : ApplicationContext
         }
         catch (Exception ex)
         {
+            RuntimeLog.WriteBootstrap($"tray-ctor-exception type='{ex.GetType().FullName}' message='{ex.Message}'");
+            RuntimeLog.WriteCrashDump("TrayApplicationContext..ctor", ex);
             ShowStartupError(ex);
             throw;
         }
@@ -130,6 +133,27 @@ public class TrayApplicationContext : ApplicationContext
 
     private static void ShowStartupError(Exception ex)
     {
+        // First, guarantee a visible error via the native MessageBox. Avalonia
+        // may not be up yet (or may itself be the failure), so we cannot rely
+        // on a custom window. DefaultDesktopOnly ensures the dialog appears
+        // even when no parent window owns the message-box thread.
+        try
+        {
+            MessageBox.Show(
+                $"Failed to start Turbophrase:\n\n{ex.GetType().Name}: {ex.Message}\n\n" +
+                $"A crash report has been written to %TEMP%\\Turbophrase-crash-*.log.",
+                "Turbophrase - Startup Error",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error,
+                MessageBoxDefaultButton.Button1,
+                MessageBoxOptions.DefaultDesktopOnly);
+        }
+        catch
+        {
+            // MessageBox itself failed; fall through to other surfaces.
+        }
+
+        // Best-effort: also try the styled Avalonia dialog if it can come up.
         try
         {
             AvaloniaUiHost.ShowStandaloneWindowAsync(() => new AppMessageWindow(
@@ -139,8 +163,16 @@ public class TrayApplicationContext : ApplicationContext
         }
         catch
         {
-            // If Avalonia itself failed, write to stderr as the last available fallback.
-            Console.Error.WriteLine($"Failed to start Turbophrase: {ex}");
+            // If Avalonia itself failed, write to stderr as a last-resort
+            // attempt for users launching from a terminal.
+            try
+            {
+                Console.Error.WriteLine($"Failed to start Turbophrase: {ex}");
+            }
+            catch
+            {
+                // No console attached; nothing else we can do.
+            }
         }
     }
 

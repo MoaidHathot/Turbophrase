@@ -39,10 +39,40 @@ static class Program
     [STAThread]
     static async Task<int> Main(string[] args)
     {
+        // Install global unhandled-exception handlers as early as possible so
+        // that any failure during startup leaves a forensic trail in
+        // %TEMP%\Turbophrase-crash-*.log and %TEMP%\Turbophrase-bootstrap.log,
+        // even when logging.enabled is false (the default) or when the config
+        // file itself is the cause of the failure.
+        InstallGlobalExceptionHandlers();
+        RuntimeLog.WriteBootstrap($"main-start version={ProductVersion} args=[{string.Join(' ', args)}]");
+
+        try
+        {
+            return await MainCore(args);
+        }
+        catch (Exception ex)
+        {
+            HandleFatalException("Program.Main", ex);
+            return 1;
+        }
+        finally
+        {
+            RuntimeLog.WriteBootstrap("main-exit");
+        }
+    }
+
+    private static async Task<int> MainCore(string[] args)
+    {
         // Enable high DPI support for proper icon scaling
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
+
+        // Honor portable-mode placement: if a turbophrase.json (or legacy
+        // config.json) sits next to the executable, prefer it over the
+        // %APPDATA% default. An explicit --config below still wins.
+        TryEnablePortableConfig();
 
         // Register the Win32-backed secrets resolver so @credman: references
         // in turbophrase.json are expanded by ConfigurationService.
@@ -134,13 +164,141 @@ static class Program
         if (!createdNew)
         {
             Console.Error.WriteLine("Turbophrase is already running.");
+            RuntimeLog.WriteBootstrap("already-running single-instance-mutex-blocked");
             return 1;
         }
 
         // Run as tray application
         ApplicationConfiguration.Initialize();
-        Application.Run(new TrayApplicationContext());
-        return 0;
+        RuntimeLog.WriteBootstrap($"tray-run-begin config='{ConfigurationService.ConfigFilePath}'");
+        try
+        {
+            Application.Run(new TrayApplicationContext());
+            RuntimeLog.WriteBootstrap("tray-run-end");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            HandleFatalException("Application.Run", ex);
+            return 1;
+        }
+    }
+
+    /// <summary>
+    /// Registers process-wide handlers for unhandled exceptions on every
+    /// surface that can throw silently in a WinForms+Avalonia hybrid:
+    /// the AppDomain, the WinForms message pump, and the TPL unobserved-task
+    /// channel. Each handler writes a crash dump to %TEMP% so post-mortem
+    /// diagnosis is possible even with logging disabled.
+    /// </summary>
+    private static void InstallGlobalExceptionHandlers()
+    {
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            if (e.ExceptionObject is Exception ex)
+            {
+                HandleFatalException("AppDomain.UnhandledException", ex);
+            }
+            else
+            {
+                RuntimeLog.WriteBootstrap($"appdomain-unhandled non-exception='{e.ExceptionObject}'");
+            }
+        };
+
+        Application.ThreadException += (_, e) =>
+        {
+            HandleFatalException("Application.ThreadException", e.Exception);
+        };
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            // Log but mark observed so the process is not torn down for a
+            // background unobserved task exception.
+            RuntimeLog.WriteCrashDump("TaskScheduler.UnobservedTaskException", e.Exception);
+            e.SetObserved();
+        };
+    }
+
+    private static void HandleFatalException(string source, Exception ex)
+    {
+        var dumpPath = RuntimeLog.WriteCrashDump(source, ex);
+        try
+        {
+            Console.Error.WriteLine($"Turbophrase fatal error ({source}): {ex.Message}");
+            if (dumpPath != null)
+            {
+                Console.Error.WriteLine($"Crash dump: {dumpPath}");
+            }
+        }
+        catch
+        {
+            // No console attached; ignore.
+        }
+
+        try
+        {
+            var body = $"Turbophrase encountered a fatal error and must close.\n\n" +
+                       $"Source: {source}\n" +
+                       $"Error:  {ex.GetType().Name}: {ex.Message}\n\n" +
+                       (dumpPath != null
+                            ? $"A full crash report was written to:\n{dumpPath}"
+                            : "Crash report could not be written.");
+
+            MessageBox.Show(
+                body,
+                "Turbophrase - Fatal Error",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error,
+                MessageBoxDefaultButton.Button1,
+                MessageBoxOptions.DefaultDesktopOnly);
+        }
+        catch
+        {
+            // If even MessageBox fails, we've done all we can.
+        }
+    }
+
+    /// <summary>
+    /// If the executable directory contains <c>turbophrase.json</c> (or the
+    /// legacy <c>config.json</c>), wire it up as the active configuration
+    /// path. This gives portable distributions a self-contained config
+    /// without requiring users to pass <c>--config</c>. An explicit
+    /// <c>--config</c> argument processed later still wins.
+    /// </summary>
+    private static void TryEnablePortableConfig()
+    {
+        try
+        {
+            var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+            if (string.IsNullOrEmpty(exePath))
+            {
+                return;
+            }
+
+            var exeDir = Path.GetDirectoryName(exePath);
+            if (string.IsNullOrEmpty(exeDir))
+            {
+                return;
+            }
+
+            var portablePreferred = Path.Combine(exeDir, "turbophrase.json");
+            var portableLegacy = Path.Combine(exeDir, "config.json");
+
+            string? portablePath = File.Exists(portablePreferred) ? portablePreferred
+                                 : File.Exists(portableLegacy) ? portableLegacy
+                                 : null;
+
+            if (portablePath != null)
+            {
+                ConfigurationService.SetCustomConfigPath(portablePath);
+                RuntimeLog.WriteBootstrap($"portable-config-detected path='{portablePath}'");
+            }
+        }
+        catch (Exception ex)
+        {
+            RuntimeLog.WriteBootstrap($"portable-config-probe-failed error='{ex.Message}'");
+        }
     }
 
     private static async Task<int> HandleCliCommandAsync(string[] args)
@@ -533,10 +691,12 @@ static class Program
             Configuration:
               Config file lookup order:
                 1. --config <path>       (explicit path)
-                2. XDG_CONFIG_HOME/Turbophrase/turbophrase.json (preferred if it exists)
-                3. XDG_CONFIG_HOME/Turbophrase/config.json      (legacy fallback)
-                4. %APPDATA%\Turbophrase\turbophrase.json      (preferred default)
-                5. %APPDATA%\Turbophrase\config.json           (legacy fallback)
+                2. <exe folder>\turbophrase.json  (portable mode, if present next to the .exe)
+                3. <exe folder>\config.json       (portable mode, legacy)
+                4. XDG_CONFIG_HOME/Turbophrase/turbophrase.json (preferred if it exists)
+                5. XDG_CONFIG_HOME/Turbophrase/config.json      (legacy fallback)
+                6. %APPDATA%\Turbophrase\turbophrase.json      (preferred default)
+                7. %APPDATA%\Turbophrase\config.json           (legacy fallback)
               Supports environment variable substitution: ${OPENAI_API_KEY}
 
             Default hotkeys:
@@ -556,6 +716,11 @@ static class Program
 
             Logging settings (in turbophrase.json):
               logging.enabled                       Write diagnostic events to turbophrase.log (default: false)
+
+            Crash diagnostics:
+              Regardless of the logging.enabled setting, fatal startup errors
+              are written to %TEMP%\Turbophrase-crash-*.log and a one-line
+              summary is appended to %TEMP%\Turbophrase-bootstrap.log.
             """);
     }
 }
